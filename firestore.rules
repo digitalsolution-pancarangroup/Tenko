@@ -1,0 +1,102 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        getUserData().role == 'SUPER_ADMIN' ||
+        request.auth.token.email == 'digital.solution@pancaran-logistic.id' ||
+        request.auth.token.email == 'admin@tenko.local'
+      );
+    }
+
+    function isNakesOrAdmin() {
+      return isSignedIn();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if true; // Allows login email lookup and authentication profile resolution
+      allow write: if isSignedIn(); // Allows initial seed and self-registration / admin updates
+    }
+
+    // Nakes Master
+    match /nakes/{nakesId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Drivers Master
+    match /drivers/{driverDocId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    // TENKO Examinations Core Transaction
+    match /tenkoExaminations/{tenkoDocId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Driver Groups Master
+    match /driverGroups/{groupId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Locations Master
+    match /locations/{locId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Health Indications Master
+    match /healthIndications/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Vitamins & Supplements Master
+    match /vitamins/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Driver Health Records
+    match /driverHealthRecords/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Medical Inventory Per Pool
+    match /poolInventory/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Stock Movement Audit Trails
+    match /stockMovements/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Audit Logs
+    match /auditLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSuperAdmin();
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "TENKO",
+  "description": "TENKO – Driver & Helper Pre-Shipment Health Clearance System untuk pemeriksaan kesiapan kesehatan sebelum pengiriman logistik.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

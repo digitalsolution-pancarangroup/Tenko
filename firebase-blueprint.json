@@ -1,0 +1,275 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access for Super Admin and Nakes",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Internal user ID" },
+        "authUid": { "type": "string", "description": "Firebase Auth UID" },
+        "fullName": { "type": "string", "description": "Full name of the user" },
+        "email": { "type": "string", "description": "Email address" },
+        "role": { "type": "string", "enum": ["SUPER_ADMIN", "NAKES"], "description": "User role" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"], "description": "Account status" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of creation" },
+        "createdBy": { "type": "string", "description": "Creator user email/name" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of update" },
+        "updatedBy": { "type": "string", "description": "Updater user email/name" }
+      },
+      "required": ["userId", "authUid", "fullName", "email", "role", "status"]
+    },
+    "Nakes": {
+      "title": "Nakes",
+      "description": "Nakes / Healthcare staff master profile",
+      "type": "object",
+      "properties": {
+        "nakesId": { "type": "string", "description": "Nakes unique ID" },
+        "userId": { "type": "string", "description": "Associated user account ID" },
+        "fullName": { "type": "string", "description": "Full name of the healthcare worker" },
+        "email": { "type": "string", "description": "Email address" },
+        "sipNumber": { "type": "string", "description": "Nomor Surat Izin Praktik (SIP)" },
+        "phoneNumber": { "type": "string", "description": "Nomor handphone / WhatsApp" },
+        "locationId": { "type": "string", "description": "Assigned pool location ID" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"], "description": "Status" },
+        "createdAt": { "type": "string", "description": "ISO creation timestamp" },
+        "createdBy": { "type": "string", "description": "Creator name" },
+        "updatedAt": { "type": "string", "description": "ISO update timestamp" },
+        "updatedBy": { "type": "string", "description": "Updater name" }
+      },
+      "required": ["nakesId", "fullName", "email", "sipNumber", "status"]
+    },
+    "Driver": {
+      "title": "Driver",
+      "description": "Master record for Driver and Helper / Kenek",
+      "type": "object",
+      "properties": {
+        "driverDocumentId": { "type": "string", "description": "Firestore document ID" },
+        "driverNumber": { "type": "string", "description": "Sequential display number" },
+        "driverId": { "type": "string", "description": "Unique company driver ID (e.g. DRV-00125)" },
+        "fullName": { "type": "string", "description": "Full legal name" },
+        "driverGroupId": { "type": "string", "description": "Driver Group ID or Name" },
+        "joinDate": { "type": "string", "description": "Join date YYYY-MM-DD" },
+        "position": { "type": "string", "enum": ["DRIVER", "KENEK"], "description": "Position" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"], "description": "Status" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" },
+        "createdBy": { "type": "string", "description": "Creator" },
+        "updatedAt": { "type": "string", "description": "Update timestamp" },
+        "updatedBy": { "type": "string", "description": "Updater" }
+      },
+      "required": ["driverId", "fullName", "position", "status"]
+    },
+    "TenkoExamination": {
+      "title": "TenkoExamination",
+      "description": "Pre-shipment readiness and health clearance transaction",
+      "type": "object",
+      "properties": {
+        "tenkoDocumentId": { "type": "string", "description": "Document ID" },
+        "sequenceNumber": { "type": "number", "description": "Sequential sequence number" },
+        "tenkoId": { "type": "string", "description": "Unique TENKO formatted ID (e.g. TENKO-20260828-0001)" },
+        "examinationDate": { "type": "string", "description": "Examination date YYYY-MM-DD" },
+        "driverId": { "type": "string", "description": "Driver ID" },
+        "driverNameSnapshot": { "type": "string", "description": "Snapshot of driver full name at exam time" },
+        "positionSnapshot": { "type": "string", "description": "Snapshot of position (DRIVER/KENEK)" },
+        "driverGroupSnapshot": { "type": "string", "description": "Snapshot of driver group" },
+        "rhaJmp": { "type": "string", "enum": ["READY", "NOT READY"], "description": "RHA-JMP readiness" },
+        "dokJmp": { "type": "string", "enum": ["READY", "NOT READY"], "description": "DOK-JMP readiness" },
+        "dailyNonWorkingHours": { "type": "string", "enum": ["< 11 HOURS", ">= 11 HOURS"], "description": "Daily non-working hours" },
+        "offDutySleepDuration": { "type": "number", "description": "Sleep duration in hours" },
+        "temperature": { "type": "number", "description": "Body temperature in Celsius" },
+        "bloodPressureSystolic": { "type": "number", "description": "Systolic blood pressure in mmHg" },
+        "bloodPressureDiastolic": { "type": "number", "description": "Diastolic blood pressure in mmHg" },
+        "bloodPressureResult": { "type": "string", "description": "Formatted BP (e.g. 120/80 mmHg)" },
+        "heartRate": { "type": "number", "description": "Heart rate in BPM" },
+        "alcoholTest": { "type": "string", "enum": ["POSITIVE", "NEGATIVE", "NO TEST"], "description": "Alcohol BAC Test" },
+        "drugTest": { "type": "string", "enum": ["POSITIVE", "NEGATIVE", "NO TEST"], "description": "Drug Test" },
+        "appearance": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Physical appearance" },
+        "eyes": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Eye condition" },
+        "face": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Facial condition" },
+        "hair": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Hair condition" },
+        "emotionalRegulation": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Emotional regulation" },
+        "problemSolving": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Problem solving observation" },
+        "communication": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Communication observation" },
+        "balanceTest": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Balance test" },
+        "interview": { "type": "string", "enum": ["NORMAL", "ABNORMAL"], "description": "Interview assessment" },
+        "summary": { "type": "string", "enum": ["PASSED", "FAILED"], "description": "Medical summary (LULUS / TIDAK LULUS)" },
+        "recommendation": { "type": "string", "enum": ["FIT TO WORK", "FIT TO WORK WITH NOTE", "UNFIT TO WORK"], "description": "Official recommendation" },
+        "note": { "type": "string", "description": "Medical or operational notes" },
+        "examinerUserId": { "type": "string", "description": "Nakes examiner user ID" },
+        "examinerName": { "type": "string", "description": "Nakes examiner full name" },
+        "locationId": { "type": "string", "description": "Examination pool location" },
+        "finishTime": { "type": "string", "description": "Finish timestamp ISO/formatted" },
+        "createdAt": { "type": "string", "description": "Created timestamp" },
+        "createdBy": { "type": "string", "description": "Created user" },
+        "updatedAt": { "type": "string", "description": "Updated timestamp" },
+        "updatedBy": { "type": "string", "description": "Updated user" }
+      },
+      "required": ["tenkoId", "driverId", "driverNameSnapshot", "positionSnapshot", "summary", "recommendation", "finishTime"]
+    },
+    "DriverGroup": {
+      "title": "DriverGroup",
+      "description": "Configurable master driver groups (e.g. Fleet A, Fleet B)",
+      "type": "object",
+      "properties": {
+        "driverGroupId": { "type": "string", "description": "Group ID" },
+        "driverGroupName": { "type": "string", "description": "Group name" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["driverGroupId", "driverGroupName", "status"]
+    },
+    "Location": {
+      "title": "Location",
+      "description": "Configurable master examination pool locations",
+      "type": "object",
+      "properties": {
+        "locationId": { "type": "string", "description": "Location ID" },
+        "locationName": { "type": "string", "description": "Location name" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] },
+        "createdAt": { "type": "string" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["locationId", "locationName", "status"]
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "Audit trail logging user and master data actions",
+      "type": "object",
+      "properties": {
+        "logId": { "type": "string", "description": "Unique log ID" },
+        "module": { "type": "string", "description": "Target module name" },
+        "recordId": { "type": "string", "description": "Associated record ID" },
+        "action": { "type": "string", "description": "Action performed" },
+        "previousValue": { "type": "string", "description": "Serialized previous value or summary" },
+        "newValue": { "type": "string", "description": "Serialized new value or summary" },
+        "userId": { "type": "string", "description": "User ID" },
+        "userName": { "type": "string", "description": "User full name" },
+        "timestamp": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["logId", "module", "action", "userId", "timestamp"]
+    },
+    "HealthIndication": {
+      "title": "HealthIndication",
+      "description": "Health symptom and complaint indication master",
+      "type": "object",
+      "properties": {
+        "indicationId": { "type": "string" },
+        "name": { "type": "string" },
+        "note": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] }
+      },
+      "required": ["indicationId", "name", "status"]
+    },
+    "Vitamin": {
+      "title": "Vitamin",
+      "description": "Vitamin and medical supplement catalog",
+      "type": "object",
+      "properties": {
+        "vitaminId": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "dosageUnit": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "INACTIVE"] }
+      },
+      "required": ["vitaminId", "name", "dosageUnit", "status"]
+    },
+    "DriverHealthRecord": {
+      "title": "DriverHealthRecord",
+      "description": "Driver health complaint, intervention, and evaluation record",
+      "type": "object",
+      "properties": {
+        "recordId": { "type": "string" },
+        "tenkoId": { "type": "string" },
+        "driverId": { "type": "string" },
+        "driverName": { "type": "string" },
+        "indication": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "SOLVED"] }
+      },
+      "required": ["recordId", "driverId", "indication", "status"]
+    },
+    "PoolInventory": {
+      "title": "PoolInventory",
+      "description": "Physical stock of vitamins/medicines tracked per operational pool location",
+      "type": "object",
+      "properties": {
+        "inventoryId": { "type": "string" },
+        "locationId": { "type": "string" },
+        "locationName": { "type": "string" },
+        "vitaminId": { "type": "string" },
+        "vitaminName": { "type": "string" },
+        "currentStock": { "type": "number" },
+        "minStockThreshold": { "type": "number" },
+        "dosageUnit": { "type": "string" }
+      },
+      "required": ["inventoryId", "locationName", "vitaminId", "currentStock", "minStockThreshold"]
+    },
+    "StockMovement": {
+      "title": "StockMovement",
+      "description": "Audit trail log of medicine stock movements (restock, dispensing on tenko, or adjustment)",
+      "type": "object",
+      "properties": {
+        "movementId": { "type": "string" },
+        "movementType": { "type": "string", "enum": ["IN", "OUT", "ADJUSTMENT"] },
+        "locationName": { "type": "string" },
+        "vitaminId": { "type": "string" },
+        "vitaminName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "previousStock": { "type": "number" },
+        "finalStock": { "type": "number" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["movementId", "movementType", "locationName", "vitaminId", "quantity", "finalStock", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User accounts and role assignments"
+    },
+    "/nakes/{nakesId}": {
+      "schema": { "$ref": "#/entities/Nakes" },
+      "description": "Nakes master profiles"
+    },
+    "/drivers/{driverDocId}": {
+      "schema": { "$ref": "#/entities/Driver" },
+      "description": "Master driver and helper records"
+    },
+    "/tenkoExaminations/{tenkoDocId}": {
+      "schema": { "$ref": "#/entities/TenkoExamination" },
+      "description": "Pre-shipment TENKO examination records"
+    },
+    "/driverGroups/{groupId}": {
+      "schema": { "$ref": "#/entities/DriverGroup" },
+      "description": "Driver fleet groups"
+    },
+    "/locations/{locId}": {
+      "schema": { "$ref": "#/entities/Location" },
+      "description": "Operational pool locations"
+    },
+    "/healthIndications/{id}": {
+      "schema": { "$ref": "#/entities/HealthIndication" },
+      "description": "Master health indications"
+    },
+    "/vitamins/{id}": {
+      "schema": { "$ref": "#/entities/Vitamin" },
+      "description": "Master vitamin catalog"
+    },
+    "/driverHealthRecords/{id}": {
+      "schema": { "$ref": "#/entities/DriverHealthRecord" },
+      "description": "Driver health complaint records"
+    },
+    "/poolInventory/{id}": {
+      "schema": { "$ref": "#/entities/PoolInventory" },
+      "description": "Per-pool medical inventory stocks"
+    },
+    "/stockMovements/{id}": {
+      "schema": { "$ref": "#/entities/StockMovement" },
+      "description": "Stock movement audit logs"
+    },
+    "/auditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AuditLog" },
+      "description": "Audit trails for compliance"
+    }
+  }
+}
