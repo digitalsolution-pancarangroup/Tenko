@@ -68,15 +68,50 @@ export async function getMedicalInventories(): Promise<MedicalInventoryItem[]> {
       return items.sort((a, b) => a.vitaminName.localeCompare(b.vitaminName));
     }
   } catch (e) {
-    console.warn('Firestore fallback to local medical inventory cache:', e);
+    console.warn('Firestore fetch medicalInventories error, fallback to local cache:', e);
   }
 
-  // Local storage cache check (returns [] if none)
+  // Local storage cache check (and sync to Firestore if Firestore was empty)
   try {
     const saved = localStorage.getItem(LOCAL_STORAGE_MEDICAL_INVENTORY_KEY);
     if (saved) {
       const parsed: MedicalInventoryItem[] = JSON.parse(saved);
-      return parsed.sort((a, b) => a.vitaminName.localeCompare(b.vitaminName));
+      if (parsed.length > 0) {
+        // Sync to Firestore in background so other devices and Vercel also see it!
+        try {
+          const batch = writeBatch(db);
+          parsed.forEach((item) => {
+            const docRef = doc(db, 'medicalInventories', item.inventoryId || makeMedicalInventoryDocId(item.vitaminId));
+            batch.set(docRef, cleanPayload(item), { merge: true });
+          });
+          batch.commit().catch(() => {});
+        } catch {}
+
+        return parsed.sort((a, b) => a.vitaminName.localeCompare(b.vitaminName));
+      }
+    }
+  } catch {}
+
+  // Fallback: Check master vitamins collection in Firestore
+  try {
+    const vitSnap = await getDocs(collection(db, 'vitamins'));
+    if (!vitSnap.empty) {
+      const items = vitSnap.docs.map((d) => {
+        const data = d.data();
+        return {
+          inventoryId: `INV-${(data.vitaminId || d.id).replace('VTM-', '')}`,
+          vitaminId: data.vitaminId || d.id,
+          vitaminName: data.name || 'Vitamin',
+          category: data.category || 'Umum',
+          dosageUnit: data.dosageUnit || 'Tablet',
+          description: data.description || '',
+          currentStock: typeof data.initialStock === 'number' ? data.initialStock : 0,
+          minStockThreshold: 30,
+          updatedAt: data.updatedAt || data.createdAt || new Date().toISOString(),
+          updatedBy: data.createdBy || 'Petugas Medis',
+        } as MedicalInventoryItem;
+      });
+      return items.sort((a, b) => a.vitaminName.localeCompare(b.vitaminName));
     }
   } catch {}
 

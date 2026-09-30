@@ -69,14 +69,12 @@ service cloud.firestore {
 
     // Health Indications Master
     match /healthIndications/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Vitamins & Supplements Master
     match /vitamins/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Driver Health Records
@@ -87,25 +85,21 @@ service cloud.firestore {
 
     // Centralized Medical Inventory
     match /medicalInventories/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     match /medicalInventory/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Medical Inventory Per Pool (Legacy Support)
     match /poolInventory/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Stock Movement Audit Trails
     match /stockMovements/{id} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read, write: if true;
     }
 
     // Attendance Logs

@@ -83,20 +83,28 @@ export const MedicalInventoryPage: React.FC = () => {
   const [newVitInitialStock, setNewVitInitialStock] = useState<number>(100);
   const [isSubmittingNewVit, setIsSubmittingNewVit] = useState(false);
 
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // Toast Notification state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    // Initial one-time purge check for Option 3 execution
-    const initPurgeAndLoad = async () => {
-      if (!localStorage.getItem('tenko_inventory_purged_clean_v3')) {
-        await clearAllMedicalInventoryData(
-          currentUser ? { userId: currentUser.userId, fullName: currentUser.fullName } : undefined
-        );
+    loadData(true);
+  }, []);
+
+  // Real-time sync when tab is refocused
+  useEffect(() => {
+    const handleSyncOnTabFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(false);
       }
-      await loadData();
     };
-    initPurgeAndLoad();
+    window.addEventListener('focus', handleSyncOnTabFocus);
+    document.addEventListener('visibilitychange', handleSyncOnTabFocus);
+    return () => {
+      window.removeEventListener('focus', handleSyncOnTabFocus);
+      document.removeEventListener('visibilitychange', handleSyncOnTabFocus);
+    };
   }, []);
 
   const showToast = (msg: string) => {
@@ -104,8 +112,12 @@ export const MedicalInventoryPage: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showFullLoading = true) => {
+    if (showFullLoading) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     try {
       const [invItems, vits, movements] = await Promise.all([
         getMedicalInventories(),
@@ -120,6 +132,7 @@ export const MedicalInventoryPage: React.FC = () => {
       console.error('Failed to load medical inventory data:', err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -337,11 +350,15 @@ export const MedicalInventoryPage: React.FC = () => {
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={loadData}
+            onClick={() => {
+              loadData(false);
+              showToast('Data Medical Inventory diperbarui.');
+            }}
+            disabled={isRefreshing || loading}
             className="text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 transition cursor-pointer"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin text-blue-600' : ''}`} />
-            <span>Muat Ulang</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${(loading || isRefreshing) ? 'animate-spin text-blue-600' : ''}`} />
+            <span>{isRefreshing ? 'Memuat...' : 'Muat Ulang'}</span>
           </button>
 
           {/* Restock Button */}
