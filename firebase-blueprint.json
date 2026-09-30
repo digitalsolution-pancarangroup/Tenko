@@ -98,6 +98,11 @@
         "examinerName": { "type": "string", "description": "Nakes examiner full name" },
         "locationId": { "type": "string", "description": "Examination pool location" },
         "finishTime": { "type": "string", "description": "Finish timestamp ISO/formatted" },
+        "isUsed": { "type": "boolean", "description": "Whether the tenko card has already been checked out by security" },
+        "securityCheckedAt": { "type": "string", "description": "ISO timestamp of security gate clearance" },
+        "securityOfficerName": { "type": "string", "description": "Name of gate security officer" },
+        "securityGateStatus": { "type": "string", "enum": ["PASSED", "REJECTED", "WARNING_PASSED"], "description": "Gate clearance decision" },
+        "vehiclePlateNumber": { "type": "string", "description": "Vehicle truck plate number" },
         "createdAt": { "type": "string", "description": "Created timestamp" },
         "createdBy": { "type": "string", "description": "Created user" },
         "updatedAt": { "type": "string", "description": "Updated timestamp" },
@@ -188,6 +193,26 @@
       },
       "required": ["recordId", "driverId", "indication", "status"]
     },
+    "MedicalInventory": {
+      "title": "MedicalInventory",
+      "description": "Centralized physical inventory stock of medicines and vitamins",
+      "type": "object",
+      "properties": {
+        "inventoryId": { "type": "string" },
+        "vitaminId": { "type": "string" },
+        "vitaminName": { "type": "string" },
+        "category": { "type": "string" },
+        "dosageUnit": { "type": "string" },
+        "description": { "type": "string" },
+        "currentStock": { "type": "number" },
+        "minStockThreshold": { "type": "number" },
+        "lastRestockDate": { "type": "string" },
+        "lastRestockQuantity": { "type": "number" },
+        "updatedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["inventoryId", "vitaminId", "vitaminName", "currentStock", "minStockThreshold"]
+    },
     "PoolInventory": {
       "title": "PoolInventory",
       "description": "Physical stock of vitamins/medicines tracked per operational pool location",
@@ -220,9 +245,57 @@
         "timestamp": { "type": "string" }
       },
       "required": ["movementId", "movementType", "locationName", "vitaminId", "quantity", "finalStock", "timestamp"]
+    },
+    "AttendanceLog": {
+      "title": "AttendanceLog",
+      "description": "Daily ERP attendance logs for tracking driver shift presence and TENKO compliance",
+      "type": "object",
+      "properties": {
+        "logDocumentId": { "type": "string" },
+        "userCode": { "type": "string", "description": "Driver ID / NIK from ERP" },
+        "driverName": { "type": "string", "description": "Driver name" },
+        "dataSource": { "type": "string", "description": "APP or Finger" },
+        "isDriver": { "type": "string", "description": "Y or N" },
+        "fingerFlag": { "type": "number", "description": "1 for IN / Masuk, 0 for OUT / Keluar" },
+        "logTime": { "type": "string", "description": "Attendance log time string" },
+        "logDate": { "type": "string", "description": "YYYY-MM-DD" },
+        "processToAttendance": { "type": "string", "description": "N or Y" },
+        "siteName": { "type": "string", "description": "Location / Pool name" },
+        "importBatchId": { "type": "string" },
+        "importedAt": { "type": "string" },
+        "importedBy": { "type": "string" }
+      },
+      "required": ["userCode", "driverName", "fingerFlag", "logTime", "logDate", "siteName"]
+    },
+    "SecurityGatePassLog": {
+      "title": "SecurityGatePassLog",
+      "description": "Gate security clearance verification logs when driver exits pool",
+      "type": "object",
+      "properties": {
+        "gateLogId": { "type": "string", "description": "Unique clearance log ID" },
+        "tenkoId": { "type": "string", "description": "TENKO transaction ID" },
+        "tenkoDocumentId": { "type": "string", "description": "Document ID" },
+        "driverId": { "type": "string", "description": "Driver ID / NIK" },
+        "driverName": { "type": "string", "description": "Driver full name" },
+        "driverGroup": { "type": "string", "description": "Driver fleet group" },
+        "position": { "type": "string", "description": "Position" },
+        "vehiclePlateNumber": { "type": "string", "description": "Vehicle truck plate" },
+        "recommendation": { "type": "string", "description": "Medical recommendation" },
+        "gateStatus": { "type": "string", "enum": ["PASSED", "WARNING_PASSED", "REJECTED"], "description": "Security decision" },
+        "securityOfficerName": { "type": "string", "description": "Officer name" },
+        "securityNotes": { "type": "string", "description": "Gate clearance notes" },
+        "locationName": { "type": "string", "description": "Gate pool location" },
+        "checkedAt": { "type": "string", "description": "ISO timestamp" },
+        "isExpired": { "type": "boolean", "description": "Whether exam was expired at scan" }
+      },
+      "required": ["gateLogId", "tenkoId", "driverId", "driverName", "gateStatus", "securityOfficerName", "checkedAt"]
     }
   },
   "firestore": {
+    "/securityGateLogs/{logId}": {
+      "schema": { "$ref": "#/entities/SecurityGatePassLog" },
+      "description": "Security gate pool clearance and checkout logs"
+    },
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User accounts and role assignments"
@@ -238,6 +311,10 @@
     "/tenkoExaminations/{tenkoDocId}": {
       "schema": { "$ref": "#/entities/TenkoExamination" },
       "description": "Pre-shipment TENKO examination records"
+    },
+    "/attendanceLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AttendanceLog" },
+      "description": "ERP Driver attendance logs for TENKO measurement"
     },
     "/driverGroups/{groupId}": {
       "schema": { "$ref": "#/entities/DriverGroup" },
@@ -258,6 +335,10 @@
     "/driverHealthRecords/{id}": {
       "schema": { "$ref": "#/entities/DriverHealthRecord" },
       "description": "Driver health complaint records"
+    },
+    "/medicalInventories/{id}": {
+      "schema": { "$ref": "#/entities/MedicalInventory" },
+      "description": "Centralized medical inventory stocks"
     },
     "/poolInventory/{id}": {
       "schema": { "$ref": "#/entities/PoolInventory" },

@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TenkoExamination } from '../../types';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { DigitalTenkoCardModal } from '../../components/tenko/DigitalTenkoCardModal';
+import { openTenkoWhatsApp } from '../../utils/whatsappHelper';
 import {
   ArrowLeft,
   Printer,
@@ -15,6 +17,9 @@ import {
   FileText,
   Info,
   CheckCircle2,
+  QrCode,
+  Send,
+  Phone,
 } from 'lucide-react';
 
 interface ExaminationDetailPageProps {
@@ -28,14 +33,16 @@ export const ExaminationDetailPage: React.FC<ExaminationDetailPageProps> = ({
   onBack,
   onPrint,
 }) => {
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+
   return (
-    <div id="examination-detail-container" className="max-w-4xl mx-auto space-y-6">
+    <div id="examination-detail-container" className="w-full max-w-5xl mx-auto space-y-6 pb-12">
       {/* Header Actions Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition"
+            className="p-2 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition cursor-pointer"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -52,13 +59,27 @@ export const ExaminationDetailPage: React.FC<ExaminationDetailPageProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onPrint}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer"
-        >
-          <Printer className="w-4 h-4" />
-          <span>Print Hasil TENKO</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Kartu Tenko Digital Button */}
+          <button
+            type="button"
+            id="btn-detail-open-digital-card"
+            onClick={() => setIsCardModalOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/20 transition cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>Kartu Tenko Digital</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={onPrint}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 transition cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Print Surat</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Multi-Section Grid */}
@@ -233,7 +254,63 @@ export const ExaminationDetailPage: React.FC<ExaminationDetailPageProps> = ({
             </div>
           </div>
         </div>
+
+        {/* SECTION 9: Status Konfirmasi Security Gerbang */}
+        <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800">
+          <div className="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-slate-800 mb-3">
+            <h4 className="font-bold text-amber-400 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4 text-amber-400" />
+              9. Konfirmasi Security Gerbang (Gate Clearance)
+            </h4>
+            {examination.securityGateStatus === 'PASSED' || (examination.isUsed && examination.securityGateStatus !== 'REJECTED') ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                PASSED • SELESAI DIGUNAKAN
+              </span>
+            ) : examination.securityGateStatus === 'REJECTED' ? (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                HOLD • DITAHAN
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold font-mono bg-slate-800 text-slate-400 border border-slate-700">
+                MENUNGGU SCAN GERBANG
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-slate-300 text-xs">
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-bold">Petugas Security</span>
+              <span className="font-bold text-white text-sm mt-0.5 block">
+                {examination.securityOfficerName || '- Belum Diverifikasi -'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-bold">Waktu Verifikasi Gerbang</span>
+              <span className="font-mono text-white text-xs mt-0.5 block">
+                {examination.securityCheckedAt
+                  ? `${new Date(examination.securityCheckedAt).toLocaleDateString('id-ID')} ${new Date(examination.securityCheckedAt).toLocaleTimeString('id-ID')} WIB`
+                  : '-'}
+              </span>
+            </div>
+
+            <div>
+              <span className="text-slate-500 block text-[10px] uppercase font-bold">Nomor Polisi Truk</span>
+              <span className="font-mono font-bold text-amber-400 text-xs mt-0.5 block">
+                {examination.vehiclePlateNumber || '-'}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Digital Tenko Card Modal */}
+      <DigitalTenkoCardModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        examination={examination}
+        onPrint={onPrint}
+      />
     </div>
   );
 };

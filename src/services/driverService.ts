@@ -5,6 +5,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -173,10 +174,45 @@ export async function deleteDriver(
   });
 }
 
+export async function deleteAllDrivers(
+  currentUser: { userId: string; fullName: string }
+): Promise<number> {
+  const snap = await getDocs(collection(db, 'drivers'));
+  if (snap.empty) return 0;
+
+  const count = snap.size;
+  const docs = snap.docs;
+  const CHUNK_SIZE = 200;
+
+  for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+    const chunk = docs.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    chunk.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  }
+
+  try {
+    localStorage.removeItem('tenko_drivers');
+    localStorage.setItem('tenko_sample_drivers_cleared', 'true');
+  } catch {}
+
+  await logAuditAction({
+    module: 'Master Driver/Kenek',
+    recordId: `CLEAR_ALL_DRIVERS_${Date.now()}`,
+    action: 'DELETE_ALL_DRIVERS',
+    newValue: { count },
+    userId: currentUser.userId,
+    userName: currentUser.fullName,
+  });
+
+  return count;
+}
+
 export interface DriverImportRow {
   driverNumber?: string | number;
   driverId: string;
   fullName: string;
+  phoneNumber?: string;
   driverGroupId: string;
   position: 'DRIVER' | 'KENEK';
   joinDate?: string;
@@ -262,7 +298,12 @@ export async function importDriversBatch(
       }
     }
 
-    // 3. Process Drivers (Insert or Update)
+    // 3. Process Drivers (Insert or Update) using Firestore writeBatch in chunks of 250 for speed and atomicity
+    const BATCH_CHUNK_SIZE = 250;
+    
+    // Prepare all operations
+    const operations: { type: 'UPDATE' | 'SET'; docRef: any; payload: any }[] = [];
+
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const cleanId = (row.driverId || '').toString().trim().toUpperCase();
@@ -277,7 +318,7 @@ export async function importDriversBatch(
       const groupNameMapped = row.driverGroupId ? row.driverGroupId.trim().toUpperCase() : 'TETAP';
 
       if (existing) {
-        // Update existing driver
+        // Update existing driver without overwriting existing phone number if new phone is empty
         const docRef = doc(db, 'drivers', existing.driverDocumentId);
         const updatePayload: Partial<Driver> = {
           fullName: cleanName,
@@ -285,15 +326,21 @@ export async function importDriversBatch(
           driverGroupId: groupNameMapped || existing.driverGroupId,
           status: row.status || existing.status,
           joinDate: row.joinDate || existing.joinDate,
-          terminateDate: row.terminateDate || existing.terminateDate,
+          terminateDate: row.terminateDate !== undefined ? row.terminateDate : existing.terminateDate,
           updatedAt: new Date().toISOString(),
           updatedBy: currentUser.fullName,
         };
+
+        // Only update phone number if a non-empty phone is explicitly provided in the import file
+        if (row.phoneNumber && row.phoneNumber.trim() !== '') {
+          updatePayload.phoneNumber = row.phoneNumber.trim();
+        }
+
         if (row.driverNumber) {
           updatePayload.driverNumber = row.driverNumber;
         }
 
-        await updateDoc(docRef, updatePayload);
+        operations.push({ type: 'UPDATE', docRef, payload: updatePayload });
         result.updatedCount += 1;
       } else {
         // Create new driver
@@ -303,6 +350,7 @@ export async function importDriversBatch(
           driverNumber: row.driverNumber || (existingDrivers.length + result.importedCount + 1).toString(),
           driverId: cleanId,
           fullName: cleanName,
+          phoneNumber: (row.phoneNumber && row.phoneNumber.trim()) || '',
           position: row.position || (cleanId.startsWith('KNK') ? 'KENEK' : 'DRIVER'),
           driverGroupId: groupNameMapped,
           joinDate: row.joinDate || new Date().toISOString().split('T')[0],
@@ -312,10 +360,25 @@ export async function importDriversBatch(
           createdBy: row.createdBy || currentUser.fullName,
         };
 
-        await setDoc(doc(db, 'drivers', docId), newDriver);
+        const docRef = doc(db, 'drivers', docId);
+        operations.push({ type: 'SET', docRef, payload: newDriver });
         driverMapByCustomId.set(cleanId, newDriver);
         result.importedCount += 1;
       }
+    }
+
+    // Execute operations in chunks of writeBatch
+    for (let c = 0; c < operations.length; c += BATCH_CHUNK_SIZE) {
+      const chunk = operations.slice(c, c + BATCH_CHUNK_SIZE);
+      const batch = writeBatch(db);
+      for (const op of chunk) {
+        if (op.type === 'UPDATE') {
+          batch.update(op.docRef, op.payload);
+        } else {
+          batch.set(op.docRef, op.payload);
+        }
+      }
+      await batch.commit();
     }
 
     // 4. Log overall audit

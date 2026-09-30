@@ -7,6 +7,7 @@ import {
   createDriver,
   updateDriver,
   deleteDriver,
+  deleteAllDrivers,
 } from '../../services/driverService';
 import { getDriverGroups } from '../../services/masterService';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -27,6 +28,7 @@ import {
   Loader2,
   FileSpreadsheet,
   Upload,
+  Phone,
 } from 'lucide-react';
 
 export const MasterDriversPage: React.FC = () => {
@@ -42,6 +44,7 @@ export const MasterDriversPage: React.FC = () => {
   const [filterPosition, setFilterPosition] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [filterGroup, setFilterGroup] = useState<string>('ALL');
+  const [filterPhone, setFilterPhone] = useState<string>('ALL'); // ALL, HAS_PHONE, NO_PHONE
 
   // Add / Edit Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +57,7 @@ export const MasterDriversPage: React.FC = () => {
   // Modal Form State
   const [formDriverId, setFormDriverId] = useState('');
   const [formFullName, setFormFullName] = useState('');
+  const [formPhoneNumber, setFormPhoneNumber] = useState('');
   const [formPosition, setFormPosition] = useState<DriverPosition>('DRIVER');
   const [formDriverGroupId, setFormDriverGroupId] = useState('');
   const [formStatus, setFormStatus] = useState<MasterStatus>('ACTIVE');
@@ -63,6 +67,8 @@ export const MasterDriversPage: React.FC = () => {
   // Delete Modal
   const [driverToDelete, setDriverToDelete] = useState<Driver | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [isDeleteAllModalOpen, setIsDeleteAllModalOpen] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   useEffect(() => {
     loadMasterData();
@@ -100,20 +106,29 @@ export const MasterDriversPage: React.FC = () => {
       const matchSearch =
         d.driverId.toLowerCase().includes(searchQuery.toLowerCase()) ||
         d.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        d.driverGroupId.toLowerCase().includes(searchQuery.toLowerCase());
+        d.driverGroupId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (d.phoneNumber && d.phoneNumber.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchPos = filterPosition === 'ALL' || d.position === filterPosition;
       const matchStat = filterStatus === 'ALL' || d.status === filterStatus;
       const matchGrp = filterGroup === 'ALL' || d.driverGroupId === filterGroup;
 
-      return matchSearch && matchPos && matchStat && matchGrp;
+      let matchPhone = true;
+      if (filterPhone === 'HAS_PHONE') {
+        matchPhone = !!(d.phoneNumber && d.phoneNumber.trim() !== '');
+      } else if (filterPhone === 'NO_PHONE') {
+        matchPhone = !d.phoneNumber || d.phoneNumber.trim() === '';
+      }
+
+      return matchSearch && matchPos && matchStat && matchGrp && matchPhone;
     });
-  }, [drivers, searchQuery, filterPosition, filterStatus, filterGroup]);
+  }, [drivers, searchQuery, filterPosition, filterStatus, filterGroup, filterPhone]);
 
   const openAddModal = () => {
     setEditingDriver(null);
     setFormDriverId('');
     setFormFullName('');
+    setFormPhoneNumber('');
     setFormPosition('DRIVER');
     setFormDriverGroupId(driverGroups[0]?.groupName || driverGroups[0]?.groupId || 'TETAP');
     setFormStatus('ACTIVE');
@@ -125,6 +140,7 @@ export const MasterDriversPage: React.FC = () => {
     setEditingDriver(driver);
     setFormDriverId(driver.driverId);
     setFormFullName(driver.fullName);
+    setFormPhoneNumber(driver.phoneNumber || '');
     setFormPosition(driver.position);
     setFormDriverGroupId(driver.driverGroupId);
     setFormStatus(driver.status);
@@ -141,6 +157,7 @@ export const MasterDriversPage: React.FC = () => {
     setFormError('');
     const cleanId = formDriverId.trim().toUpperCase();
     const cleanName = formFullName.trim();
+    const cleanPhone = formPhoneNumber.trim();
 
     if (!cleanId) {
       setFormError('Driver ID wajib diisi.');
@@ -168,6 +185,7 @@ export const MasterDriversPage: React.FC = () => {
           editingDriver.driverDocumentId,
           {
             fullName: cleanName,
+            phoneNumber: cleanPhone,
             position: formPosition,
             driverGroupId: formDriverGroupId,
             status: formStatus,
@@ -181,6 +199,7 @@ export const MasterDriversPage: React.FC = () => {
           {
             driverId: cleanId,
             fullName: cleanName,
+            phoneNumber: cleanPhone,
             position: formPosition,
             driverGroupId: formDriverGroupId,
             status: formStatus,
@@ -193,7 +212,9 @@ export const MasterDriversPage: React.FC = () => {
       setIsModalOpen(false);
       await loadMasterData();
     } catch (err: any) {
+      console.error(err);
       setFormError(err.message || 'Gagal menyimpan data.');
+      showToast(err.message || 'Gagal menyimpan data.', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -217,20 +238,50 @@ export const MasterDriversPage: React.FC = () => {
     }
   };
 
+  const handleDeleteAllDriversConfirm = async () => {
+    setDeletingAll(true);
+    try {
+      const count = await deleteAllDrivers({
+        userId: currentUser?.userId || 'SYS_USER',
+        fullName: currentUser?.fullName || 'Super Admin',
+      });
+      showToast(`Semua data driver (${count} data) berhasil dikosongkan.`, 'success');
+      setIsDeleteAllModalOpen(false);
+      await loadMasterData();
+    } catch (err: any) {
+      showToast(err.message || 'Gagal menghapus semua data driver.', 'error');
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   return (
     <div id="master-drivers-view" className="space-y-6">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
-            {drivers.length} Driver & Kenek
-          </span>
-          <span className="text-xs text-slate-400 font-medium">
-            (Menampilkan {filteredDrivers.length} aktif / filter)
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Master Driver & Kenek
+          </h1>
+          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold whitespace-nowrap">
+            {drivers.length} Personel
           </span>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+          {/* Delete All Drivers Button (if drivers exist) */}
+          {drivers.length > 0 && (
+            <button
+              id="btn-delete-all-drivers"
+              onClick={() => setIsDeleteAllModalOpen(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3.5 py-3 sm:py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold rounded-xl transition shadow-2xs cursor-pointer whitespace-nowrap"
+              title="Kosongkan Semua Data Driver"
+            >
+              <Trash2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+              <span>Kosongkan Data</span>
+            </button>
+          )}
+
           {/* Import Button */}
           <button
             id="btn-open-import-driver"
@@ -255,7 +306,7 @@ export const MasterDriversPage: React.FC = () => {
 
       {/* Search & Multi-Filters Card */}
       <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* Search Box */}
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -316,6 +367,20 @@ export const MasterDriversPage: React.FC = () => {
               })}
             </select>
           </div>
+
+          {/* Filter Status No WA */}
+          <div>
+            <select
+              id="select-filter-phone"
+              value={filterPhone}
+              onChange={(e) => setFilterPhone(e.target.value)}
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+            >
+              <option value="ALL">Semua Kontak WA</option>
+              <option value="HAS_PHONE">✓ Sudah Ada No WA</option>
+              <option value="NO_PHONE">⚠ Belum Ada No WA</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -337,14 +402,15 @@ export const MasterDriversPage: React.FC = () => {
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
-            <table className="w-full min-w-[750px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[850px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-3.5 pl-4 min-w-[130px]">Driver ID</th>
-                  <th className="py-3 px-3.5 min-w-[200px]">Nama Lengkap</th>
-                  <th className="py-3 px-3.5 min-w-[110px]">Posisi</th>
-                  <th className="py-3 px-3.5 min-w-[180px]">Driver Group</th>
-                  <th className="py-3 px-3.5 min-w-[100px]">Status</th>
+                  <th className="py-3 px-3.5 min-w-[180px]">Nama Lengkap</th>
+                  <th className="py-3 px-3.5 min-w-[140px]">No. WhatsApp / HP</th>
+                  <th className="py-3 px-3.5 min-w-[100px]">Posisi</th>
+                  <th className="py-3 px-3.5 min-w-[170px]">Driver Group</th>
+                  <th className="py-3 px-3.5 min-w-[90px]">Status</th>
                   <th className="py-3 px-3.5 pr-4 min-w-[80px] text-right">Aksi</th>
                 </tr>
               </thead>
@@ -353,6 +419,16 @@ export const MasterDriversPage: React.FC = () => {
                   <tr key={drv.driverDocumentId} className="hover:bg-blue-50/40 transition">
                     <td className="py-3.5 px-3.5 pl-4 font-mono font-bold text-blue-900 whitespace-nowrap">{drv.driverId}</td>
                     <td className="py-3.5 px-3.5 font-bold text-slate-900">{drv.fullName}</td>
+                    <td className="py-3.5 px-3.5 whitespace-nowrap">
+                      {drv.phoneNumber ? (
+                        <span className="inline-flex items-center gap-1.5 font-mono text-xs text-slate-700 font-semibold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          <Phone className="w-3 h-3 text-emerald-600" />
+                          <span>{drv.phoneNumber}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">- Belum ada -</span>
+                      )}
+                    </td>
                     <td className="py-3.5 px-3.5 whitespace-nowrap">
                       <span className={`inline-block px-2.5 py-0.5 rounded-lg text-[11px] font-bold ${
                         drv.position === 'DRIVER'
@@ -480,6 +556,26 @@ export const MasterDriversPage: React.FC = () => {
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 font-bold focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                   required
                 />
+              </div>
+
+              {/* WhatsApp / Phone Number */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Nomor WhatsApp / HP
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-600">
+                    <Phone className="w-4 h-4" />
+                  </div>
+                  <input
+                    type="tel"
+                    value={formPhoneNumber}
+                    onChange={(e) => setFormPhoneNumber(e.target.value)}
+                    placeholder="Contoh: 081234567890"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-600/20 focus:border-emerald-600 text-slate-900"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">Digunakan untuk pengiriman Kartu Tenko digital via WhatsApp.</p>
               </div>
 
               {/* Driver Group with Quick Add Action Button */}
@@ -618,6 +714,56 @@ export const MasterDriversPage: React.FC = () => {
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
               >
                 {deleting ? 'Menghapus...' : 'Ya, Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ALL DRIVERS CONFIRMATION MODAL */}
+      {isDeleteAllModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-xl bg-rose-50 text-rose-600">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Kosongkan Semua Data Driver?</h3>
+                <p className="text-xs text-slate-500">Tindakan ini akan menghapus semua ({drivers.length}) data driver/kenek.</p>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-900 leading-relaxed">
+              Setelah dikosongkan, Anda dapat memasukkan data master driver/kenek secara manual atau melalui Import Excel/CSV.
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteAllModalOpen(false)}
+                disabled={deletingAll}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteAllDriversConfirm}
+                disabled={deletingAll}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {deletingAll ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Ya, Kosongkan Semua</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

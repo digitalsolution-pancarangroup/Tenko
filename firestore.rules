@@ -44,9 +44,14 @@ service cloud.firestore {
 
     // TENKO Examinations Core Transaction
     match /tenkoExaminations/{tenkoDocId} {
-      allow read: if isSignedIn();
+      allow read, update: if true; // Allows public QR & Barcode verification and gate clearance updates
       allow create: if isSignedIn();
-      allow update: if isSignedIn();
+      allow delete: if isSuperAdmin();
+    }
+
+    // Security Gate Pass Logs
+    match /securityGateLogs/{logId} {
+      allow read, create, update: if true; // Allows gate security verification logging at gates
       allow delete: if isSuperAdmin();
     }
 
@@ -80,7 +85,18 @@ service cloud.firestore {
       allow write: if isSignedIn();
     }
 
-    // Medical Inventory Per Pool
+    // Centralized Medical Inventory
+    match /medicalInventories/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    match /medicalInventory/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Medical Inventory Per Pool (Legacy Support)
     match /poolInventory/{id} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
@@ -90,6 +106,13 @@ service cloud.firestore {
     match /stockMovements/{id} {
       allow read: if isSignedIn();
       allow write: if isSignedIn();
+    }
+
+    // Attendance Logs
+    match /attendanceLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isSuperAdmin();
     }
 
     // Audit Logs

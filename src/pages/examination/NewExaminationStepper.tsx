@@ -41,16 +41,19 @@ import {
   HeartPulse,
   Pill,
   Check,
+  Phone,
 } from 'lucide-react';
 
 interface NewExaminationStepperProps {
   onSuccess: (createdExam: TenkoExamination) => void;
   onCancel: () => void;
+  initialDriverId?: string;
 }
 
 export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   onSuccess,
   onCancel,
+  initialDriverId,
 }) => {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
@@ -71,39 +74,40 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
 
   // Form State: STEP 1 - Driver
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [driverPhoneNumber, setDriverPhoneNumber] = useState<string>('');
 
-  // STEP 2 - Kesiapan Kerja
-  const [rhaJmp, setRhaJmp] = useState<'READY' | 'NOT READY'>('READY');
-  const [dokJmp, setDokJmp] = useState<'READY' | 'NOT READY'>('READY');
-  const [dailyNonWorkingHours, setDailyNonWorkingHours] = useState<'< 11 HOURS' | '>= 11 HOURS'>('>= 11 HOURS');
-  const [offDutySleepDuration, setOffDutySleepDuration] = useState<number>(8);
+  // STEP 2 - Kesiapan Kerja (Default unselected / empty)
+  const [rhaJmp, setRhaJmp] = useState<'READY' | 'NOT READY' | null>(null);
+  const [dokJmp, setDokJmp] = useState<'READY' | 'NOT READY' | null>(null);
+  const [dailyNonWorkingHours, setDailyNonWorkingHours] = useState<'< 11 HOURS' | '>= 11 HOURS' | null>(null);
+  const [offDutySleepDuration, setOffDutySleepDuration] = useState<number | ''>('');
 
-  // STEP 3 - Tanda Vital
-  const [temperature, setTemperature] = useState<number>(36.5);
-  const [bloodPressureSystolic, setBloodPressureSystolic] = useState<number>(120);
-  const [bloodPressureDiastolic, setBloodPressureDiastolic] = useState<number>(80);
-  const [heartRate, setHeartRate] = useState<number>(75);
+  // STEP 3 - Tanda Vital (Default empty inputs)
+  const [temperature, setTemperature] = useState<number | ''>('');
+  const [bloodPressureSystolic, setBloodPressureSystolic] = useState<number | ''>('');
+  const [bloodPressureDiastolic, setBloodPressureDiastolic] = useState<number | ''>('');
+  const [heartRate, setHeartRate] = useState<number | ''>('');
 
-  // STEP 4 - Screening
-  const [alcoholTest, setAlcoholTest] = useState<'POSITIVE' | 'NEGATIVE' | 'NO TEST'>('NEGATIVE');
-  const [drugTest, setDrugTest] = useState<'POSITIVE' | 'NEGATIVE' | 'NO TEST'>('NEGATIVE');
+  // STEP 4 - Screening (Default unselected)
+  const [alcoholTest, setAlcoholTest] = useState<'POSITIVE' | 'NEGATIVE' | 'NO TEST' | null>(null);
+  const [drugTest, setDrugTest] = useState<'POSITIVE' | 'NEGATIVE' | 'NO TEST' | null>(null);
 
-  // STEP 5 - Fisik & Perilaku (11 items)
-  const [appearance, setAppearance] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [eyes, setEyes] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [face, setFace] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [hair, setHair] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [emotionalRegulation, setEmotionalRegulation] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [problemSolving, setProblemSolving] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [selfAwareness, setSelfAwareness] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [communication, setCommunication] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [decisionMaking, setDecisionMaking] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [balanceTest, setBalanceTest] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
-  const [interview, setInterview] = useState<'NORMAL' | 'ABNORMAL'>('NORMAL');
+  // STEP 5 - Fisik & Perilaku (11 items, Default unselected)
+  const [appearance, setAppearance] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [eyes, setEyes] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [face, setFace] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [hair, setHair] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [emotionalRegulation, setEmotionalRegulation] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [problemSolving, setProblemSolving] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [selfAwareness, setSelfAwareness] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [communication, setCommunication] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [decisionMaking, setDecisionMaking] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [balanceTest, setBalanceTest] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
+  const [interview, setInterview] = useState<'NORMAL' | 'ABNORMAL' | null>(null);
 
   // STEP 6 - Hasil Pemeriksaan
-  const [summary, setSummary] = useState<'PASSED' | 'FAILED'>('PASSED');
-  const [recommendation, setRecommendation] = useState<'FIT TO WORK' | 'FIT TO WORK WITH NOTE' | 'UNFIT TO WORK'>('FIT TO WORK');
+  const [summary, setSummary] = useState<'PASSED' | 'FAILED' | null>(null);
+  const [recommendation, setRecommendation] = useState<'FIT TO WORK' | 'FIT TO WORK WITH NOTE' | 'UNFIT TO WORK' | ''>('');
   const [note, setNote] = useState<string>('');
   const [finishTime, setFinishTime] = useState<string>(() => {
     const now = new Date();
@@ -169,6 +173,18 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
           setSelectedLocation(tanahMerdeka.locationName);
         }
       }
+
+      if (initialDriverId) {
+        const cleanTargetId = initialDriverId.trim().toUpperCase();
+        const matchedDrv = dList.find(
+          (d) =>
+            d.driverId.toUpperCase() === cleanTargetId ||
+            String(d.driverNumber) === cleanTargetId
+        );
+        if (matchedDrv) {
+          handleSelectDriver(matchedDrv);
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -193,6 +209,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
 
   const handleSelectDriver = async (drv: Driver) => {
     setSelectedDriver(drv);
+    setDriverPhoneNumber(drv.phoneNumber || '');
     setStepError('');
     setCheckingHealthRecord(true);
     try {
@@ -217,6 +234,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   const handleQuickAddSuccess = (newDrv: Driver) => {
     setAllDrivers((prev) => [newDrv, ...prev]);
     setSelectedDriver(newDrv);
+    setDriverPhoneNumber(newDrv.phoneNumber || '');
     setDriverSearchQuery(newDrv.driverId);
     showToast(`Driver ${newDrv.fullName} (${newDrv.driverId}) berhasil dipilih.`, 'success');
   };
@@ -230,30 +248,89 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         return false;
       }
     } else if (currentStep === 2) {
-      if (offDutySleepDuration <= 0) {
-        setStepError('Durasi tidur off-duty harus lebih dari 0 jam.');
+      if (!rhaJmp) {
+        setStepError('Silakan tentukan status RHA - JMP (PAHAM / TIDAK PAHAM).');
+        return false;
+      }
+      if (!dokJmp) {
+        setStepError('Silakan tentukan status DOK - JMP (PAHAM / TIDAK PAHAM).');
+        return false;
+      }
+      if (!dailyNonWorkingHours) {
+        setStepError('Silakan pilih Daily Non-Working Hours (< 11 JAM / ≥ 11 JAM).');
+        return false;
+      }
+      if (offDutySleepDuration === '' || Number(offDutySleepDuration) <= 0) {
+        setStepError('Durasi tidur off-duty wajib diisi (contoh: 8 jam).');
         return false;
       }
     } else if (currentStep === 3) {
-      if (temperature < 34 || temperature > 42) {
+      if (temperature === '') {
+        setStepError('Suhu tubuh wajib diisi (contoh: 36.5 °C).');
+        return false;
+      }
+      const tempNum = Number(temperature);
+      if (isNaN(tempNum) || tempNum < 34 || tempNum > 42) {
         setStepError('Suhu tubuh di luar rentang fisiologis wajar (34 - 42 °C).');
         return false;
       }
-      if (bloodPressureSystolic <= 0 || bloodPressureDiastolic <= 0) {
-        setStepError('Tekanan darah sistolik dan diastolik wajib diisi dengan benar.');
+      if (bloodPressureSystolic === '' || bloodPressureDiastolic === '') {
+        setStepError('Tekanan darah sistolik dan diastolik wajib diisi (contoh: 120 / 80 mmHg).');
         return false;
       }
-      if (heartRate <= 0) {
-        setStepError('Denyut nadi wajib diisi.');
+      const sysNum = Number(bloodPressureSystolic);
+      const diaNum = Number(bloodPressureDiastolic);
+      if (isNaN(sysNum) || isNaN(diaNum) || sysNum <= 0 || diaNum <= 0) {
+        setStepError('Tekanan darah sistolik dan diastolik harus lebih dari 0 mmHg.');
+        return false;
+      }
+      if (heartRate === '' || Number(heartRate) <= 0) {
+        setStepError('Denyut nadi wajib diisi (contoh: 75 BPM).');
+        return false;
+      }
+    } else if (currentStep === 4) {
+      if (!alcoholTest) {
+        setStepError('Silakan tentukan hasil skrining Alcohol Test (BAC).');
+        return false;
+      }
+      if (!drugTest) {
+        setStepError('Silakan tentukan hasil skrining Drug Test (Narkoba).');
+        return false;
+      }
+    } else if (currentStep === 5) {
+      const physicalObservations = [
+        { label: 'Penampilan', val: appearance },
+        { label: 'Mata', val: eyes },
+        { label: 'Wajah', val: face },
+        { label: 'Rambut', val: hair },
+        { label: 'Regulasi Emosi', val: emotionalRegulation },
+        { label: 'Problem Solving', val: problemSolving },
+        { label: 'Kesadaran Diri', val: selfAwareness },
+        { label: 'Komunikasi', val: communication },
+        { label: 'Pengambilan Keputusan', val: decisionMaking },
+        { label: 'Tes Keseimbangan', val: balanceTest },
+        { label: 'Wawancara', val: interview },
+      ];
+      const unselected = physicalObservations.find((item) => item.val === null);
+      if (unselected) {
+        setStepError(`Parameter "${unselected.label}" belum dinilai. Harap lengkapi semua 11 parameter observasi fisik & perilaku.`);
         return false;
       }
     } else if (currentStep === 6) {
+      if (!summary) {
+        setStepError('Silakan tentukan Summary Pemeriksaan (LULUS / TIDAK LULUS).');
+        return false;
+      }
+      if (!recommendation) {
+        setStepError('Silakan pilih Rekomendasi Nakes.');
+        return false;
+      }
       const isNoteRequired =
         summary === 'FAILED' ||
         recommendation === 'FIT TO WORK WITH NOTE' ||
         recommendation === 'UNFIT TO WORK';
       if (isNoteRequired && !note.trim()) {
-        setStepError('Catatan wajib diisi untuk hasil pemeriksaan ini.');
+        setStepError('Catatan pemeriksaan wajib diisi untuk hasil FAILED / Dengan Catatan / UNFIT.');
         return false;
       }
       if (hasNewHealthComplaint) {
@@ -302,36 +379,38 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
     setLoading(true);
     try {
       const examDate = new Date().toISOString().split('T')[0];
+      const cleanPhone = driverPhoneNumber.trim() || selectedDriver.phoneNumber || '';
       const created = await createTenkoExamination(
         {
           examinationDate: examDate,
           driverId: selectedDriver.driverId,
           driverNameSnapshot: selectedDriver.fullName,
+          driverPhoneSnapshot: cleanPhone,
           positionSnapshot: selectedDriver.position,
           driverGroupSnapshot: selectedDriver.driverGroupId,
-          rhaJmp,
-          dokJmp,
-          dailyNonWorkingHours,
-          offDutySleepDuration: Number(offDutySleepDuration),
-          temperature: Number(temperature),
-          bloodPressureSystolic: Number(bloodPressureSystolic),
-          bloodPressureDiastolic: Number(bloodPressureDiastolic),
-          heartRate: Number(heartRate),
-          alcoholTest,
-          drugTest,
-          appearance,
-          eyes,
-          face,
-          hair,
-          emotionalRegulation,
-          problemSolving,
-          selfAwareness,
-          communication,
-          decisionMaking,
-          balanceTest,
-          interview,
-          summary,
-          recommendation,
+          rhaJmp: rhaJmp || 'READY',
+          dokJmp: dokJmp || 'READY',
+          dailyNonWorkingHours: dailyNonWorkingHours || '>= 11 HOURS',
+          offDutySleepDuration: Number(offDutySleepDuration) || 0,
+          temperature: Number(temperature) || 0,
+          bloodPressureSystolic: Number(bloodPressureSystolic) || 0,
+          bloodPressureDiastolic: Number(bloodPressureDiastolic) || 0,
+          heartRate: Number(heartRate) || 0,
+          alcoholTest: alcoholTest || 'NEGATIVE',
+          drugTest: drugTest || 'NEGATIVE',
+          appearance: appearance || 'NORMAL',
+          eyes: eyes || 'NORMAL',
+          face: face || 'NORMAL',
+          hair: hair || 'NORMAL',
+          emotionalRegulation: emotionalRegulation || 'NORMAL',
+          problemSolving: problemSolving || 'NORMAL',
+          selfAwareness: selfAwareness || 'NORMAL',
+          communication: communication || 'NORMAL',
+          decisionMaking: decisionMaking || 'NORMAL',
+          balanceTest: balanceTest || 'NORMAL',
+          interview: interview || 'NORMAL',
+          summary: summary || 'PASSED',
+          recommendation: (recommendation as any) || 'FIT TO WORK',
           note: note.trim(),
           examinerUserId: currentUser?.userId || 'SYS_NAKES',
           examinerName: currentUser?.fullName || 'Ns. Ratna Sari, S.Kep',
@@ -453,7 +532,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   ];
 
   return (
-    <div id="new-examination-stepper-container" className="max-w-4xl mx-auto space-y-6">
+    <div id="new-examination-stepper-container" className="w-full max-w-5xl mx-auto space-y-6">
       {/* Top Header & Progress Bar */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-6">
@@ -562,31 +641,70 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
 
             {/* Selected Driver Banner if chosen */}
             {selectedDriver && (
-              <div className="p-4 rounded-2xl bg-blue-50 border-2 border-blue-300 flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3.5">
-                  <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-xs">
-                    <Truck className="w-6 h-6" />
+              <div className="p-4 rounded-2xl bg-blue-50 border-2 border-blue-300 space-y-3.5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-xs">
+                      <Truck className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-900">
+                        {selectedDriver.position}
+                      </span>
+                      <h4 className="font-black text-slate-900 text-base mt-1">{selectedDriver.fullName}</h4>
+                      <p className="text-xs font-mono font-bold text-blue-800 flex items-center gap-1.5 flex-wrap">
+                        <span>{selectedDriver.driverId}</span>
+                        <span>•</span>
+                        <span>{selectedDriver.driverGroupId}</span>
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-blue-200 text-blue-900">
-                      {selectedDriver.position}
-                    </span>
-                    <h4 className="font-black text-slate-900 text-base mt-1">{selectedDriver.fullName}</h4>
-                    <p className="text-xs font-mono font-bold text-blue-800">{selectedDriver.driverId} • {selectedDriver.driverGroupId}</p>
-                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDriver(null);
+                      setDriverPhoneNumber('');
+                      setPreviousActiveRecord(null);
+                      setPreviousEvaluationText('');
+                    }}
+                    className="text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline pt-1 cursor-pointer"
+                  >
+                    Ganti Driver
+                  </button>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedDriver(null);
-                    setPreviousActiveRecord(null);
-                    setPreviousEvaluationText('');
-                  }}
-                  className="text-xs font-bold text-blue-700 hover:text-blue-900 hover:underline pt-1 cursor-pointer"
-                >
-                  Ganti Driver
-                </button>
+                {/* Nomor WhatsApp Input / Auto-Sync */}
+                <div className="pt-2 border-t border-blue-200/80">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 mb-1.5">
+                    <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                      <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Nomor Handphone / WhatsApp Driver</span>
+                      {driverPhoneNumber ? (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded">
+                          Tersimpan
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded">
+                          Belum Ada No WA
+                        </span>
+                      )}
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      Otomatis tersinkron ke Master Driver saat TENKO selesai
+                    </span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id="input-examination-driver-phone"
+                      type="tel"
+                      value={driverPhoneNumber}
+                      onChange={(e) => setDriverPhoneNumber(e.target.value)}
+                      placeholder="Contoh: 081234567890 atau 6281234567890"
+                      className="w-full px-3.5 py-2 rounded-xl border border-blue-300 font-mono text-xs md:text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-600/30 focus:border-blue-600"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -755,7 +873,15 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                             </span>
                           </div>
                           <p className="font-bold text-slate-900 text-sm truncate">{drv.fullName}</p>
-                          <p className="text-xs text-slate-500 truncate">{drv.driverGroupId}</p>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 truncate mt-0.5">
+                            <span className="truncate">{drv.driverGroupId}</span>
+                            {drv.phoneNumber && (
+                              <span className="shrink-0 inline-flex items-center gap-0.5 font-mono text-[11px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                                <Phone className="w-2.5 h-2.5" />
+                                {drv.phoneNumber}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="shrink-0">
@@ -800,7 +926,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    SIAP
+                    PAHAM
                   </button>
                   <button
                     type="button"
@@ -811,7 +937,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    TIDAK SIAP
+                    TIDAK PAHAM
                   </button>
                 </div>
               </div>
@@ -831,7 +957,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    SIAP
+                    PAHAM
                   </button>
                   <button
                     type="button"
@@ -842,7 +968,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    TIDAK SIAP
+                    TIDAK PAHAM
                   </button>
                 </div>
               </div>
@@ -891,8 +1017,9 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     min="1"
                     max="24"
                     value={offDutySleepDuration}
-                    onChange={(e) => setOffDutySleepDuration(parseFloat(e.target.value) || 0)}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white"
+                    onChange={(e) => setOffDutySleepDuration(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                    placeholder="Contoh: 8"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white placeholder:text-slate-400 placeholder:font-normal"
                     required
                   />
                   <span className="absolute right-4 top-3.5 text-xs font-semibold text-slate-400">Jam</span>
@@ -921,21 +1048,28 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     <Thermometer className="w-4 h-4 text-blue-600" />
                     Suhu Tubuh (°C) <span className="text-rose-500">*</span>
                   </label>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                    temperature >= 36.0 && temperature <= 37.5
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}>
-                    {temperature >= 36.0 && temperature <= 37.5 ? 'Normal' : 'Perhatian'}
-                  </span>
+                  {temperature !== '' ? (
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                        Number(temperature) >= 36.0 && Number(temperature) <= 37.5
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-rose-100 text-rose-800'
+                      }`}
+                    >
+                      {Number(temperature) >= 36.0 && Number(temperature) <= 37.5 ? 'Normal' : 'Perhatian'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-medium">Belum diukur</span>
+                  )}
                 </div>
                 <input
                   id="input-temperature"
                   type="number"
                   step="0.1"
                   value={temperature}
-                  onChange={(e) => setTemperature(parseFloat(e.target.value) || 0)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white"
+                  onChange={(e) => setTemperature(e.target.value === '' ? '' : parseFloat(e.target.value) || 0)}
+                  placeholder="Contoh: 36.5"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white placeholder:text-slate-400 placeholder:font-normal"
                   required
                 />
               </div>
@@ -947,20 +1081,27 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     <Heart className="w-4 h-4 text-rose-600" />
                     Denyut Nadi (BPM) <span className="text-rose-500">*</span>
                   </label>
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
-                    heartRate >= 60 && heartRate <= 100
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}>
-                    {heartRate >= 60 && heartRate <= 100 ? 'Normal (60-100)' : 'Perlu Evaluasi'}
-                  </span>
+                  {heartRate !== '' ? (
+                    <span
+                      className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                        Number(heartRate) >= 60 && Number(heartRate) <= 100
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {Number(heartRate) >= 60 && Number(heartRate) <= 100 ? 'Normal (60-100)' : 'Perlu Evaluasi'}
+                    </span>
+                  ) : (
+                    <span className="text-[11px] text-slate-400 font-medium">Belum diukur</span>
+                  )}
                 </div>
                 <input
                   id="input-heart-rate"
                   type="number"
                   value={heartRate}
-                  onChange={(e) => setHeartRate(parseInt(e.target.value) || 0)}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white"
+                  onChange={(e) => setHeartRate(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)}
+                  placeholder="Contoh: 75"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 font-bold text-sm bg-white placeholder:text-slate-400 placeholder:font-normal"
                   required
                 />
               </div>
@@ -982,9 +1123,9 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     id="input-bp-systolic"
                     type="number"
                     value={bloodPressureSystolic}
-                    onChange={(e) => setBloodPressureSystolic(parseInt(e.target.value) || 0)}
-                    placeholder="120"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 font-bold text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                    onChange={(e) => setBloodPressureSystolic(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)}
+                    placeholder="Contoh: 120"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 font-bold text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 placeholder:text-slate-400 placeholder:font-normal"
                     required
                   />
                 </div>
@@ -998,9 +1139,9 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     id="input-bp-diastolic"
                     type="number"
                     value={bloodPressureDiastolic}
-                    onChange={(e) => setBloodPressureDiastolic(parseInt(e.target.value) || 0)}
-                    placeholder="80"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 font-bold text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                    onChange={(e) => setBloodPressureDiastolic(e.target.value === '' ? '' : parseInt(e.target.value, 10) || 0)}
+                    placeholder="Contoh: 80"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 font-bold text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 placeholder:text-slate-400 placeholder:font-normal"
                     required
                   />
                 </div>
@@ -1011,8 +1152,14 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     Hasil Tekanan Darah (Auto Formula)
                   </label>
                   <div className="px-4 py-3 rounded-xl border border-blue-200 bg-blue-50/70 font-mono font-black text-blue-900 text-sm flex items-center justify-between">
-                    <span>{bloodPressureSystolic}/{bloodPressureDiastolic} mmHg</span>
-                    <span className="text-[10px] text-blue-600 font-bold uppercase">Tercatat</span>
+                    <span>
+                      {bloodPressureSystolic !== '' && bloodPressureDiastolic !== ''
+                        ? `${bloodPressureSystolic}/${bloodPressureDiastolic} mmHg`
+                        : '- / - mmHg'}
+                    </span>
+                    <span className="text-[10px] text-blue-600 font-bold uppercase">
+                      {bloodPressureSystolic !== '' && bloodPressureDiastolic !== '' ? 'Tercatat' : 'Menunggu Input'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -1160,14 +1307,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setAppearance('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${appearance === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      appearance === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setAppearance('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${appearance === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      appearance === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1181,14 +1336,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setEyes('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${eyes === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      eyes === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setEyes('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${eyes === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      eyes === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1202,14 +1365,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setFace('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${face === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      face === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setFace('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${face === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      face === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1223,14 +1394,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setHair('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${hair === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      hair === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setHair('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${hair === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      hair === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1244,14 +1423,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setEmotionalRegulation('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${emotionalRegulation === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      emotionalRegulation === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setEmotionalRegulation('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${emotionalRegulation === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      emotionalRegulation === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1265,14 +1452,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setProblemSolving('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${problemSolving === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      problemSolving === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setProblemSolving('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${problemSolving === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      problemSolving === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1286,14 +1481,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setSelfAwareness('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${selfAwareness === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      selfAwareness === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelfAwareness('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${selfAwareness === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      selfAwareness === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1307,14 +1510,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setCommunication('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${communication === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      communication === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setCommunication('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${communication === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      communication === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1328,14 +1539,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setDecisionMaking('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${decisionMaking === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      decisionMaking === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setDecisionMaking('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${decisionMaking === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      decisionMaking === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1349,14 +1568,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setBalanceTest('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${balanceTest === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      balanceTest === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setBalanceTest('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${balanceTest === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      balanceTest === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1370,14 +1597,22 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <button
                     type="button"
                     onClick={() => setInterview('NORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${interview === 'NORMAL' ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      interview === 'NORMAL'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     NORMAL
                   </button>
                   <button
                     type="button"
                     onClick={() => setInterview('ABNORMAL')}
-                    className={`py-2 text-xs font-bold rounded-lg border ${interview === 'ABNORMAL' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-700'}`}
+                    className={`py-2 text-xs font-bold rounded-lg border transition ${
+                      interview === 'ABNORMAL'
+                        ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
                   >
                     TIDAK NORMAL
                   </button>
@@ -1450,11 +1685,13 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   className="w-full px-4 py-3.5 rounded-xl border border-slate-300 font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                   required
                 >
+                  <option value="">-- Pilih Rekomendasi Medis --</option>
                   <option value="FIT TO WORK">FIT TO WORK</option>
                   <option value="FIT TO WORK WITH NOTE">FIT TO WORK WITH NOTE</option>
                   <option value="UNFIT TO WORK">UNFIT TO WORK</option>
                 </select>
                 <p className="text-[11px] text-slate-500">
+                  {recommendation === '' && 'Pilih rekomendasi kelayakan tugas berkendara bagi driver.'}
                   {recommendation === 'FIT TO WORK' && 'Pengemudi siap mengoperasikan armada secara penuh.'}
                   {recommendation === 'FIT TO WORK WITH NOTE' && 'Boleh bertugas dengan syarat pemantauan medis / istirahat berkala.'}
                   {recommendation === 'UNFIT TO WORK' && 'Pengemudi DILARANG menjalankan tugas pengiriman logistik.'}

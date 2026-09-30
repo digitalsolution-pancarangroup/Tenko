@@ -20,7 +20,6 @@ import {
   User,
   Calendar,
   Layers,
-  ChevronDown,
 } from 'lucide-react';
 
 export interface MedicalStockCardModalProps {
@@ -32,16 +31,10 @@ export interface MedicalStockCardModalProps {
     description?: string;
     currentStock: number;
     minStockThreshold: number;
-    locationName: string; // 'ALL' or specific pool name
-    poolBreakdown?: {
-      locationName: string;
-      stock: number;
-      minThreshold: number;
-      status: 'SAFE' | 'LOW' | 'OUT';
-    }[];
+    locationName?: string;
   };
   isSuperAdmin: boolean;
-  allLocations: string[];
+  allLocations?: string[];
   onClose: () => void;
   onOpenRestock: (vitaminId: string, locationName?: string) => void;
   onOpenAdjust: (vitaminId: string, locationName?: string, currentStock?: number) => void;
@@ -51,7 +44,6 @@ export interface MedicalStockCardModalProps {
 export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
   item,
   isSuperAdmin,
-  allLocations,
   onClose,
   onOpenRestock,
   onOpenAdjust,
@@ -59,21 +51,14 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
 }) => {
   const [loadingMovements, setLoadingMovements] = useState(true);
   const [movements, setMovements] = useState<StockMovement[]>([]);
-  const [selectedPoolFilter, setSelectedPoolFilter] = useState<string>(
-    item.locationName === 'ALL' ? 'ALL' : item.locationName
-  );
   const [typeFilter, setTypeFilter] = useState<'ALL' | StockMovementType>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showPoolBreakdown, setShowPoolBreakdown] = useState(isSuperAdmin && item.locationName === 'ALL');
 
   // Load movements for this specific vitamin
   const fetchMovements = async () => {
     setLoadingMovements(true);
     try {
-      const data = await getStockMovements(
-        selectedPoolFilter === 'ALL' ? undefined : selectedPoolFilter,
-        item.vitaminId
-      );
+      const data = await getStockMovements(undefined, item.vitaminId);
       setMovements(data);
     } catch (err) {
       console.error('Failed to load movements for vitamin:', err);
@@ -84,7 +69,7 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
 
   useEffect(() => {
     fetchMovements();
-  }, [item.vitaminId, selectedPoolFilter]);
+  }, [item.vitaminId]);
 
   // Calculations for KPI cards
   const stats = useMemo(() => {
@@ -112,12 +97,12 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
       const q = searchQuery.toLowerCase();
       const matchesSearch =
         !q ||
-        m.referenceId?.toLowerCase().includes(q) ||
-        m.driverName?.toLowerCase().includes(q) ||
-        m.driverId?.toLowerCase().includes(q) ||
-        m.notes?.toLowerCase().includes(q) ||
-        m.performedByName?.toLowerCase().includes(q) ||
-        m.locationName?.toLowerCase().includes(q);
+        (m.referenceId || '').toLowerCase().includes(q) ||
+        (m.driverName || '').toLowerCase().includes(q) ||
+        (m.driverId || '').toLowerCase().includes(q) ||
+        (m.notes || '').toLowerCase().includes(q) ||
+        (m.performedByName || '').toLowerCase().includes(q) ||
+        (m.locationName || '').toLowerCase().includes(q);
 
       return matchesType && matchesSearch;
     });
@@ -221,7 +206,7 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
             {/* Saldo Stok Fisik */}
             <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
               <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
-                {item.locationName === 'ALL' ? 'Total Saldo Semua Pool' : 'Saldo Stok Fisik Pool'}
+                Saldo Stok Fisik
               </span>
               <div className="mt-1.5 flex items-baseline gap-1.5">
                 <span
@@ -238,7 +223,7 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
                 <span className="text-xs font-bold text-slate-400">{item.dosageUnit}</span>
               </div>
               <span className="text-[11px] text-slate-500 mt-1 block">
-                Lokasi: {item.locationName === 'ALL' ? 'Akumulasi Perusahaan' : item.locationName.replace('Pool ', '')}
+                Tersedia di inventori
               </span>
             </div>
 
@@ -297,87 +282,6 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
             </div>
           </div>
 
-          {/* SEBARAN STOK ANTAR POOL (SUPER ADMIN / MULTI-POOL) */}
-          {item.poolBreakdown && item.poolBreakdown.length > 0 && (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowPoolBreakdown(!showPoolBreakdown)}
-                className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition cursor-pointer border-b border-slate-100"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  <h3 className="text-xs md:text-sm font-bold text-slate-900">
-                    Sebaran Saldo Fisik di Seluruh Fasilitas Pool ({item.poolBreakdown.length} Lokasi)
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2 text-slate-500 text-xs font-semibold">
-                  <span>{showPoolBreakdown ? 'Sembunyikan' : 'Tampilkan'}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${showPoolBreakdown ? 'rotate-180' : ''}`} />
-                </div>
-              </button>
-
-              {showPoolBreakdown && (
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {item.poolBreakdown.map((pb) => (
-                    <div
-                      key={pb.locationName}
-                      className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 hover:bg-white transition flex flex-col justify-between"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-xs font-bold text-slate-900">
-                            {pb.locationName.replace('Pool ', '')}
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            Min Buffer: {pb.minThreshold} {item.dosageUnit}
-                          </div>
-                        </div>
-
-                        {pb.status === 'OUT' ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-rose-100 text-rose-800">
-                            Habis
-                          </span>
-                        ) : pb.status === 'LOW' ? (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                            Menipis
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                            Aman
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-3 pt-2.5 border-t border-slate-200/80 flex items-center justify-between">
-                        <div className="text-sm font-black text-slate-900">
-                          {pb.stock} <span className="text-[10px] font-normal text-slate-500">{item.dosageUnit}</span>
-                        </div>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => onOpenRestock(item.vitaminId, pb.locationName)}
-                            className="px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                          >
-                            + Restock
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onOpenAdjust(item.vitaminId, pb.locationName, pb.stock)}
-                            className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition cursor-pointer"
-                          >
-                            Opname
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* STOCK CARD / MUTATION HISTORY TABLE */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xs overflow-hidden">
             {/* Table Header & Controls */}
@@ -411,22 +315,6 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
                   />
                 </div>
 
-                {/* Pool Filter (if Super Admin or viewing ALL) */}
-                {isSuperAdmin && (
-                  <select
-                    value={selectedPoolFilter}
-                    onChange={(e) => setSelectedPoolFilter(e.target.value)}
-                    className="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none cursor-pointer"
-                  >
-                    <option value="ALL">🌐 Semua Pool</option>
-                    {allLocations.map((loc) => (
-                      <option key={loc} value={loc}>
-                        {loc.replace('Pool ', '')}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
                 {/* Type Filter */}
                 <select
                   value={typeFilter}
@@ -455,10 +343,9 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
-                    <th className="py-3 px-4">No</th>
+                    <th className="py-3 px-4 w-10 text-center">No</th>
                     <th className="py-3 px-4">Tanggal & Jam</th>
                     <th className="py-3 px-4">Jenis Mutasi</th>
-                    <th className="py-3 px-4">Lokasi Pool</th>
                     <th className="py-3 px-4 text-center">Mutasi (+/-)</th>
                     <th className="py-3 px-4 text-center">Saldo Akhir</th>
                     <th className="py-3 px-4">Dokumen / Driver</th>
@@ -470,14 +357,14 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
                 <tbody className="divide-y divide-slate-100 text-xs font-medium text-slate-800">
                   {loadingMovements ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
                         <RefreshCw className="w-5 h-5 animate-spin mx-auto text-blue-600 mb-2" />
                         <span>Memuat buku mutasi kartu stok...</span>
                       </td>
                     </tr>
                   ) : filteredMovements.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-12 text-center text-slate-400">
+                      <td colSpan={8} className="py-12 text-center text-slate-400">
                         Belum ada catatan mutasi stok untuk obat ini pada filter yang dipilih.
                       </td>
                     </tr>
@@ -488,7 +375,9 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
 
                       return (
                         <tr key={mov.movementId || idx} className="hover:bg-slate-50/70 transition">
-                          <td className="py-3 px-4 font-mono text-slate-400 font-bold">{idx + 1}</td>
+                          <td className="py-3 px-4 font-mono text-slate-400 font-bold text-center">
+                            {idx + 1}
+                          </td>
 
                           <td className="py-3 px-4 font-mono text-[11px] text-slate-600 whitespace-nowrap">
                             {mov.timestamp
@@ -519,10 +408,6 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
                                 Opname Fisik
                               </span>
                             )}
-                          </td>
-
-                          <td className="py-3 px-4 font-bold text-slate-800 whitespace-nowrap">
-                            {mov.locationName ? mov.locationName.replace('Pool ', '') : '-'}
                           </td>
 
                           <td className="py-3 px-4 text-center whitespace-nowrap">
@@ -580,13 +465,13 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
         {/* MODAL FOOTER WITH ACTIONS */}
         <div className="p-4 md:p-5 bg-white border-t border-slate-200 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-xs text-slate-500 font-medium">
-            Kartu stok resmi terstandarisasi SOP Distribusi Farmasi TENKO Panca Global.
+            Kartu stok resmi terstandarisasi SOP Distribusi Farmasi TENKO.
           </div>
 
           <div className="flex items-center gap-2.5">
             <button
               type="button"
-              onClick={() => onOpenRestock(item.vitaminId, item.locationName === 'ALL' ? undefined : item.locationName)}
+              onClick={() => onOpenRestock(item.vitaminId)}
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer"
             >
               <PackagePlus className="w-4 h-4" />
@@ -598,7 +483,7 @@ export const MedicalStockCardModal: React.FC<MedicalStockCardModalProps> = ({
               onClick={() =>
                 onOpenAdjust(
                   item.vitaminId,
-                  item.locationName === 'ALL' ? undefined : item.locationName,
+                  undefined,
                   item.currentStock
                 )
               }

@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
+import { TenkoLogo } from '../common/TenkoLogo';
 import {
   LayoutDashboard,
   Users,
   FileSpreadsheet,
-  ShieldAlert,
   LogOut,
   ChevronDown,
   ChevronRight,
@@ -14,6 +14,9 @@ import {
   HeartPulse,
   Pill,
   Activity,
+  QrCode,
+  CalendarCheck,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -25,6 +28,9 @@ export type NavigationPage =
   | 'examination_result'
   | 'examination_detail'
   | 'data_tenko'
+  | 'attendance_log'
+  | 'assessment_report'
+  | 'security_gate'
   | 'driver_health'
   | 'medical_inventory'
   | 'master_drivers'
@@ -34,7 +40,6 @@ export type NavigationPage =
   | 'master_vitamins'
   | 'master_nakes'
   | 'user_management'
-  | 'audit_logs'
   | 'print_examination';
 
 interface SidebarProps {
@@ -114,15 +119,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         } print:hidden`}
       >
         {/* Brand & Logo Header */}
-        <div className="p-5 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-600 flex items-center justify-center text-white font-black text-lg shadow-md shadow-blue-500/25">
-              TK
-            </div>
-            <div>
-              <span className="font-black text-xl tracking-tight text-slate-900">TENKO</span>
-            </div>
-          </div>
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+          <TenkoLogo size="md" variant="dark" />
         </div>
 
         {/* Navigation List - 5 Main Structured Menus */}
@@ -150,6 +148,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <FileSpreadsheet className="w-4 h-4 shrink-0" />
                 <span>Data TENKO</span>
+              </button>
+
+              {/* Attendance Log (Absensi ERP vs TENKO) */}
+              <button
+                id="nav-attendance-log"
+                onClick={() => handleNav('attendance_log')}
+                className={`w-full ${navItemClass(currentPage === 'attendance_log')}`}
+              >
+                <CalendarCheck className={`w-4 h-4 shrink-0 ${currentPage === 'attendance_log' ? 'text-white' : 'text-blue-600'}`} />
+                <span>Attendance Log</span>
+              </button>
+
+              {/* Assessment Report (Result Tenko Assessment) */}
+              <button
+                id="nav-assessment-report"
+                onClick={() => handleNav('assessment_report')}
+                className={`w-full ${navItemClass(currentPage === 'assessment_report')}`}
+              >
+                <ClipboardCheck className={`w-4 h-4 shrink-0 ${currentPage === 'assessment_report' ? 'text-white' : 'text-indigo-600'}`} />
+                <span>Assessment Report</span>
               </button>
 
               {/* Driver Health */}
@@ -259,16 +277,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <UserCog className="w-4 h-4 shrink-0 text-purple-600" />
                 <span>User Management</span>
-              </button>
-
-              {/* Audit Log */}
-              <button
-                id="nav-audit-logs"
-                onClick={() => handleNav('audit_logs')}
-                className={`w-full ${navItemClass(currentPage === 'audit_logs')}`}
-              >
-                <ShieldAlert className="w-4 h-4 shrink-0 text-amber-600" />
-                <span>Audit Log</span>
               </button>
             </nav>
           </div>

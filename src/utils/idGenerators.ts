@@ -148,3 +148,28 @@ export function generateDriverHealthRecordDocId(driverId: string, date: Date = n
   const rand = generateRandomCode(3);
   return `DHR_${yyyymmdd}_${cleanDriver}_${rand}`;
 }
+
+/**
+ * Attendance Log Document ID (ERP Clock-In / Clock-Out)
+ * Format: att_USERCODE_FLAG_CLEANTIME
+ * Example: att_201240370_1_2026-03-03_00-03
+ * Idempotent: ensures importing the same ERP file updates the record without creating duplicate entries.
+ */
+export function generateAttendanceDocId(
+  userCode: string,
+  fingerFlag: number | string,
+  logTime: string,
+  logDate?: string
+): string {
+  const cleanUser = sanitizeCode(userCode, 'UNKNOWN');
+  const flag = Number(fingerFlag) === 1 || String(fingerFlag).toUpperCase() === 'IN' || String(fingerFlag).toUpperCase() === 'MASUK' ? 1 : 0;
+  
+  // Format clean time string for safe Firestore doc ID (replace slashes, colons, spaces)
+  const timeSource = (logTime || logDate || '').trim();
+  const cleanTime = timeSource
+    .replace(/[^A-Za-z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  return `att_${cleanUser}_${flag}_${cleanTime || 'TIME'}`;
+}

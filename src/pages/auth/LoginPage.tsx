@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
+import { TenkoLogo } from '../../components/common/TenkoLogo';
 import {
   ShieldCheck,
   Stethoscope,
@@ -97,12 +98,11 @@ export const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950 flex flex-col justify-center items-center p-4 selection:bg-blue-600 selection:text-white">
       <div className="w-full max-w-md">
         {/* Brand Logo & Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-black text-2xl shadow-xl shadow-blue-500/20 mb-4 border border-blue-400/30">
-            TK
+        <div className="text-center mb-8 flex flex-col items-center">
+          <div className="bg-white/95 px-6 py-3.5 rounded-3xl shadow-xl shadow-black/20 border border-white/20 mb-4 backdrop-blur-md">
+            <TenkoLogo size="lg" variant="dark" />
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-white uppercase">TENKO</h1>
-          <p className="text-sm font-semibold text-blue-400 mt-1 uppercase tracking-wider">
+          <p className="text-sm font-bold text-blue-400 mt-1 uppercase tracking-wider">
             Driver & Helper Pre-Shipment Health Clearance System
           </p>
           <p className="text-xs text-slate-400 mt-1">

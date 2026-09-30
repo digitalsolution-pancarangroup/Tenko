@@ -49,6 +49,7 @@ export interface Driver {
   driverNumber?: string | number;
   driverId: string; // e.g. DRV-00125 or 301240143
   fullName: string;
+  phoneNumber?: string; // e.g. 081234567890
   driverGroupId: string;
   joinDate?: string;
   terminateDate?: string;
@@ -67,6 +68,7 @@ export interface TenkoExamination {
   examinationDate: string; // YYYY-MM-DD
   driverId: string;
   driverNameSnapshot: string;
+  driverPhoneSnapshot?: string;
   positionSnapshot: DriverPosition;
   driverGroupSnapshot: string;
   
@@ -111,6 +113,15 @@ export interface TenkoExamination {
   locationId?: string;
   locationNameSnapshot?: string;
   finishTime: string; // Editable Date & Time
+
+  // Security Gate Clearance Flags & Expiration/Used status
+  isUsed?: boolean;
+  securityCheckedAt?: string;
+  securityOfficerName?: string;
+  securityGateStatus?: GatePassStatus;
+  vehiclePlateNumber?: string;
+  securityNotes?: string;
+  securityLocationName?: string;
 
   createdAt: string;
   createdBy: string;
@@ -175,6 +186,21 @@ export interface VitaminItem {
   updatedBy?: string;
 }
 
+export interface MedicalInventoryItem {
+  inventoryId: string; // docId: e.g. "INV-VTM-01" or "VTM-01"
+  vitaminId: string; // e.g. "VTM-01"
+  vitaminName: string; // e.g. "Vitamin C 500mg"
+  category: string; // e.g. "Daya Tahan Tubuh"
+  dosageUnit: string; // e.g. "Tablet", "Kapsul", "Strip", "Botol"
+  description?: string;
+  currentStock: number;
+  minStockThreshold: number;
+  lastRestockDate?: string;
+  lastRestockQuantity?: number;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
 export interface PoolInventoryItem {
   inventoryId: string; // docId: e.g. loc-01_vtm-01
   locationId?: string; // e.g. LOC-01
@@ -196,7 +222,7 @@ export interface StockMovement {
   movementId: string; // e.g. MOV-202609-0001
   movementType: StockMovementType;
   locationId?: string;
-  locationName: string;
+  locationName?: string;
   vitaminId: string;
   vitaminName: string;
   quantity: number;
@@ -269,3 +295,60 @@ export interface AuditLog {
   userName: string;
   timestamp: string;
 }
+
+export type GatePassStatus = 'PASSED' | 'REJECTED' | 'WARNING_PASSED';
+
+export interface SecurityGatePassLog {
+  gateLogId: string; // e.g. GATE-20260916-0001
+  tenkoId: string;
+  tenkoDocumentId?: string;
+  driverId: string;
+  driverName: string;
+  driverGroup: string;
+  position: DriverPosition;
+  vehiclePlateNumber?: string; // e.g. B 9123 UXT
+  recommendation: ExaminationRecommendation;
+  gateStatus: GatePassStatus;
+  securityOfficerName: string; // Manual name typed by security officer
+  securityNotes?: string;
+  locationName?: string;
+  checkedAt: string; // ISO timestamp
+  isExpired?: boolean;
+}
+
+export interface AttendanceLogItem {
+  logDocumentId?: string;
+  userCode: string; // ID Driver, e.g. "201240370"
+  driverName: string; // e.g. "ANDRI SANTOSO"
+  dataSource: string; // e.g. "APP"
+  isDriver: string; // e.g. "Y"
+  fingerFlag: number; // 1 = Masuk (IN), 0 = Keluar (OUT)
+  logTime: string; // e.g. "03/03/2026 00:03" or ISO
+  logDate: string; // e.g. "2026-03-03" (YYYY-MM-DD)
+  processToAttendance: string; // e.g. "N"
+  siteName: string; // e.g. "Gudang AQUA Pandaan (TIV)"
+  importBatchId?: string;
+  importedAt?: string;
+  importedBy?: string;
+}
+
+export interface AttendanceComparisonItem {
+  logDocumentId?: string;
+  userCode: string;
+  driverName: string;
+  siteName: string;
+  dataSource: string;
+  fingerFlag: number; // 1 = Masuk (IN), 0 = Keluar (OUT)
+  logTime: string;
+  inLogTime?: string; // Backwards-compatible alias for logTime
+  logDate: string;
+  // TENKO Status
+  hasTenko: boolean;
+  tenkoRecord?: TenkoExamination;
+  tenkoRecommendation?: ExaminationRecommendation;
+  tenkoTime?: string;
+  // Driver phone if matched from Master Driver
+  phoneNumber?: string;
+  driverGroup?: string;
+}
+

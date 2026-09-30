@@ -1,6 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  getFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  doc,
+  getDocFromServer,
+} from 'firebase/firestore';
 import firebaseConfigJson from '../firebase-applet-config.json';
 
 const firebaseConfig = {
@@ -39,24 +46,39 @@ export async function createFirebaseAuthAccount(email: string, password: string)
   }
 }
 
-// Use specified firestoreDatabaseId if configured
-export const db = firebaseConfigJson.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfigJson.firestoreDatabaseId)
-  : getFirestore(app);
-
-// Test Firestore connection on boot
-export async function testConnection() {
+// Initialize Firestore with auto-detect long polling and persistent local cache for sandbox resilience
+function getInitializedFirestore() {
   try {
-    await getDocFromServer(doc(db, 'system', 'connection'));
-  } catch (error: any) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firebase client offline or connecting...');
-    } else if (error?.message?.includes('Quota limit exceeded') || error?.message?.includes('quota')) {
-      console.warn('Firestore daily read quota reached on this project.');
-    }
+    return initializeFirestore(
+      app,
+      {
+        experimentalAutoDetectLongPolling: true,
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      },
+      firebaseConfigJson.firestoreDatabaseId || '(default)'
+    );
+  } catch (_e) {
+    return firebaseConfigJson.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfigJson.firestoreDatabaseId)
+      : getFirestore(app);
   }
 }
 
+export const db = getInitializedFirestore();
+
+// Test Firestore backend connection gracefully as per Firebase Integration skill
+async function testConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('Firestore client operating in resilient offline/cache mode.');
+    }
+  }
+}
 testConnection();
 
 export default app;
+

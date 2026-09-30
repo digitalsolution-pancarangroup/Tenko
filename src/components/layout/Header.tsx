@@ -53,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="app-header"
-      className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 md:px-8 py-3 flex items-center justify-between print:hidden min-h-[56px]"
+      className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 px-4 md:px-6 lg:px-8 py-3 flex items-center justify-between print:hidden min-h-[56px]"
     >
       <div className="flex items-center gap-3">
         <button

@@ -98,6 +98,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
         'NO TENKO DRIVER': 1,
         'DRIVER ID': '301240143',
         'DRIVER NAME': 'ADAM',
+        'NO WHATSAPP / HP': '081234567890',
         'DRIVER GROUP': 'ABPN1-Helper Reguler Balikpapan',
         'JOIN DATE': '11/11/2024',
         'TERMINATE DATE': '',
@@ -109,6 +110,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
         'NO TENKO DRIVER': 2,
         'DRIVER ID': '301240109',
         'DRIVER NAME': 'AHMAD DANI',
+        'NO WHATSAPP / HP': '081398765432',
         'DRIVER GROUP': 'ABPN1-Helper Reguler Balikpapan',
         'JOIN DATE': '09/11/2024',
         'TERMINATE DATE': '',
@@ -120,6 +122,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
         'NO TENKO DRIVER': 3,
         'DRIVER ID': '301250022',
         'DRIVER NAME': 'ALFIN RANGGA SAPUTRA',
+        'NO WHATSAPP / HP': '085712345678',
         'DRIVER GROUP': 'ABPN1-Helper Reguler Balikpapan',
         'JOIN DATE': '23/01/2025',
         'TERMINATE DATE': '',
@@ -131,6 +134,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
         'NO TENKO DRIVER': 4,
         'DRIVER ID': '301210045',
         'DRIVER NAME': 'BUDI SANTOSO',
+        'NO WHATSAPP / HP': '081901234567',
         'DRIVER GROUP': 'Armada A - Wingbox',
         'JOIN DATE': '01/05/2023',
         'TERMINATE DATE': '',
@@ -146,6 +150,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
       { wch: 18 }, // NO TENKO DRIVER
       { wch: 16 }, // DRIVER ID
       { wch: 28 }, // DRIVER NAME
+      { wch: 20 }, // NO WHATSAPP / HP
       { wch: 34 }, // DRIVER GROUP
       { wch: 14 }, // JOIN DATE
       { wch: 16 }, // TERMINATE DATE
@@ -227,6 +232,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
         const rawDriverNumber = getVal(['NO TENKO DRIVER', 'NO DRIVER', 'NO', 'NUMBER', 'URUT']);
         const rawDriverId = getVal(['DRIVER ID', 'ID DRIVER', 'DRIVER_ID', 'ID', 'NIK']);
         const rawDriverName = getVal(['DRIVER NAME', 'NAMA DRIVER', 'NAMA LENGKAP', 'DRIVER_NAME', 'NAME', 'NAMA']);
+        const rawPhoneNumber = getVal(['NO WHATSAPP', 'NO HP', 'WHATSAPP', 'NOMOR HP', 'NO TELP', 'PHONE', 'PHONE NUMBER', 'TELEPON', 'NO_HP', 'NO_WHATSAPP', 'HP']);
         const rawDriverGroup = getVal(['DRIVER GROUP', 'DRIVER_GROUP', 'GROUP', 'ARMADA', 'GRUP', 'UNIT']);
         const rawJoinDate = getVal(['JOIN DATE', 'JOIN_DATE', 'TGL GABUNG', 'TANGGAL GABUNG', 'TGL MASUK']);
         const rawTerminateDate = getVal(['TERMINATE DATE', 'TERMINATE_DATE', 'TGL BERHENTI', 'TANGGAL KELUAR', 'TGL KELUAR']);
@@ -236,6 +242,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
 
         const cleanDriverId = String(rawDriverId).trim().toUpperCase();
         const cleanName = String(rawDriverName).trim();
+        const cleanPhone = String(rawPhoneNumber).trim();
         const cleanGroup = String(rawDriverGroup).trim().toUpperCase() || 'TETAP';
         const cleanPositionRaw = String(rawPosition).trim().toUpperCase();
 
@@ -265,14 +272,17 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
           error = 'Nama Driver kosong';
         }
 
-        const isExisting = cleanDriverId ? existingDriverIdSet.has(cleanDriverId) : false;
+        const existingDriver = cleanDriverId ? existingDrivers.find((d) => (d.driverId || '').trim().toUpperCase() === cleanDriverId) : null;
+        const isExisting = !!existingDriver;
         const isNewGrp = cleanGroup ? !existingGroupNameSet.has(cleanGroup) : false;
+        const finalPhone = cleanPhone || (existingDriver?.phoneNumber || '');
 
         parsed.push({
           rowNumber: idx + 1,
           driverNumber: rawDriverNumber || idx + 1,
           driverId: cleanDriverId,
           fullName: cleanName,
+          phoneNumber: finalPhone,
           driverGroupId: cleanGroup,
           position: mappedPosition,
           joinDate: parsedJoin || new Date().toISOString().split('T')[0],
@@ -579,6 +589,7 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
                           <th className="py-2.5 px-3">No</th>
                           <th className="py-2.5 px-3">Driver ID</th>
                           <th className="py-2.5 px-3">Nama Lengkap</th>
+                          <th className="py-2.5 px-3">No WA / HP</th>
                           <th className="py-2.5 px-3">Posisi</th>
                           <th className="py-2.5 px-3">Driver Group</th>
                           <th className="py-2.5 px-3">Join Date</th>
@@ -592,6 +603,13 @@ export const ImportDriverModal: React.FC<ImportDriverModalProps> = ({
                             <td className="py-2.5 px-3 text-slate-400 font-mono">{row.driverNumber || row.rowNumber}</td>
                             <td className="py-2.5 px-3 font-mono font-bold text-blue-900">{row.driverId || '-'}</td>
                             <td className="py-2.5 px-3 font-bold text-slate-900">{row.fullName || '-'}</td>
+                            <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700">
+                              {row.phoneNumber ? (
+                                <span className="text-emerald-700 font-semibold">{row.phoneNumber}</span>
+                              ) : (
+                                <span className="text-slate-400 italic">-</span>
+                              )}
+                            </td>
                             <td className="py-2.5 px-3">
                               <span
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${

@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { ImportTenkoModal } from '../../components/tenko/ImportTenkoModal';
+import { DigitalTenkoCardModal } from '../../components/tenko/DigitalTenkoCardModal';
 import {
   Search,
   Filter,
@@ -31,6 +32,9 @@ import {
   Menu as MenuIcon,
   Sparkles,
   Building2,
+  QrCode,
+  Send,
+  RefreshCw,
 } from 'lucide-react';
 
 interface DataTenkoPageProps {
@@ -48,6 +52,8 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
   const [driversList, setDriversList] = useState<Driver[]>([]);
   const [locationsList, setLocationsList] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedCardExam, setSelectedCardExam] = useState<TenkoExamination | null>(null);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -83,16 +89,34 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
   const [filterRecommendation, setFilterRecommendation] = useState('ALL');
   const [filterSummary, setFilterSummary] = useState('ALL');
   const [filterNakes, setFilterNakes] = useState('ALL');
-  const [filterLocation, setFilterLocation] = useState<string>(() => {
-    return currentUser?.role === 'SUPER_ADMIN' ? 'ALL' : (currentUser?.locationName || 'ALL');
-  });
+  const [filterLocation, setFilterLocation] = useState<string>('ALL');
+  const [filterSecurityStatus, setFilterSecurityStatus] = useState<string>('ALL');
 
   useEffect(() => {
-    loadData();
+    loadData(true);
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  // Automatic real-time sync when tab is revisited or browser window is focused
+  useEffect(() => {
+    const handleSyncOnTabFocus = () => {
+      if (document.visibilityState === 'visible') {
+        loadData(false);
+      }
+    };
+    window.addEventListener('focus', handleSyncOnTabFocus);
+    document.addEventListener('visibilitychange', handleSyncOnTabFocus);
+    return () => {
+      window.removeEventListener('focus', handleSyncOnTabFocus);
+      document.removeEventListener('visibilitychange', handleSyncOnTabFocus);
+    };
+  }, []);
+
+  const loadData = async (showFullLoading = true) => {
+    if (showFullLoading) {
+      setLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
     try {
       const [exams, grps, nakes, drvs, locs] = await Promise.all([
         getTenkoExaminations(),
@@ -110,6 +134,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       console.error(err);
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -122,7 +147,8 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     setFilterRecommendation('ALL');
     setFilterSummary('ALL');
     setFilterNakes('ALL');
-    setFilterLocation(currentUser?.role === 'SUPER_ADMIN' ? 'ALL' : (currentUser?.locationName || 'ALL'));
+    setFilterLocation('ALL');
+    setFilterSecurityStatus('ALL');
     setCurrentPage(1);
   };
 
@@ -136,7 +162,9 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         (exam.driverNameSnapshot && exam.driverNameSnapshot.toLowerCase().includes(q)) ||
         (exam.driverGroupSnapshot && exam.driverGroupSnapshot.toLowerCase().includes(q)) ||
         (exam.locationNameSnapshot && exam.locationNameSnapshot.toLowerCase().includes(q)) ||
-        (exam.locationId && exam.locationId.toLowerCase().includes(q));
+        (exam.locationId && exam.locationId.toLowerCase().includes(q)) ||
+        (exam.securityOfficerName && exam.securityOfficerName.toLowerCase().includes(q)) ||
+        (exam.vehiclePlateNumber && exam.vehiclePlateNumber.toLowerCase().includes(q));
 
       const examDate = exam.examinationDate || (exam.createdAt ? exam.createdAt.split('T')[0] : '');
       const matchStartDate = !filterStartDate || examDate >= filterStartDate;
@@ -152,6 +180,14 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         (exam.locationNameSnapshot && exam.locationNameSnapshot.trim().toLowerCase() === filterLocation.trim().toLowerCase()) ||
         (exam.locationId && exam.locationId.trim().toLowerCase() === filterLocation.trim().toLowerCase());
 
+      const isExamPassed = exam.securityGateStatus === 'PASSED' || exam.securityGateStatus === 'WARNING_PASSED' || (exam.isUsed && exam.securityGateStatus !== 'REJECTED');
+      const isExamHeld = exam.securityGateStatus === 'REJECTED';
+      const matchSecurity =
+        filterSecurityStatus === 'ALL' ||
+        (filterSecurityStatus === 'PASSED' && isExamPassed) ||
+        (filterSecurityStatus === 'HOLD' && isExamHeld) ||
+        (filterSecurityStatus === 'PENDING' && !isExamPassed && !isExamHeld);
+
       return (
         matchSearch &&
         matchStartDate &&
@@ -161,7 +197,8 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         matchRec &&
         matchSum &&
         matchNakes &&
-        matchLoc
+        matchLoc &&
+        matchSecurity
       );
     });
   }, [
@@ -175,6 +212,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     filterSummary,
     filterNakes,
     filterLocation,
+    filterSecurityStatus,
   ]);
 
   // Paginated records
@@ -297,7 +335,10 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     <div id="data-tenko-view" className="space-y-6">
       {/* Header & Quick Action Menu */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Data TENKO
+          </h1>
           <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold whitespace-nowrap">
             {examinations.length} Rekam Medis
           </span>
@@ -306,8 +347,23 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </span>
         </div>
 
-        {/* Top Actions: Pemeriksaan Baru + Menu Tindakan */}
+        {/* Top Actions: Refresh Data + Pemeriksaan Baru + Menu Tindakan */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
+          <button
+            id="btn-data-tenko-refresh"
+            type="button"
+            onClick={() => {
+              loadData(false);
+              showToast('Data TENKO berhasil disinkronkan.', 'success');
+            }}
+            disabled={isRefreshing}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 sm:py-2.5 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 text-xs font-bold rounded-2xl border border-slate-200 transition-all cursor-pointer whitespace-nowrap"
+            title="Sinkronkan data terbaru dari server"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Menyinkronkan...' : 'Refresh Data'}</span>
+          </button>
+
           {onNewExamination && (
             <button
               id="btn-data-tenko-new-exam"
@@ -572,6 +628,23 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </div>
 
           <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Konfirmasi Security</label>
+            <select
+              value={filterSecurityStatus}
+              onChange={(e) => {
+                setFilterSecurityStatus(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:outline-none"
+            >
+              <option value="ALL">Semua Status Security</option>
+              <option value="PASSED">Terkonfirmasi: PASSED (Izin Keluar)</option>
+              <option value="HOLD">Terkonfirmasi: HOLD (Ditahan)</option>
+              <option value="PENDING">Belum Verifikasi Security</option>
+            </select>
+          </div>
+
+          <div>
             <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nakes Pemeriksa</label>
             <select
               value={filterNakes}
@@ -640,6 +713,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   <th className="py-3 px-3.5 min-w-[130px]">Tanda Vital (BP)</th>
                   <th className="py-3 px-3.5 min-w-[110px]">Summary</th>
                   <th className="py-3 px-3.5 min-w-[130px]">Rekomendasi</th>
+                  <th className="py-3 px-3.5 min-w-[170px]">Konfirmasi Security</th>
                   <th className="py-3 px-3.5 min-w-[130px]">Pemeriksa</th>
                   <th className="py-3 px-3.5 pr-4 min-w-[80px] text-right">Aksi</th>
                 </tr>
@@ -686,11 +760,67 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                     <td className="py-3.5 px-3.5 whitespace-nowrap">
                       <StatusBadge type="recommendation" value={exam.recommendation} size="sm" />
                     </td>
+                    <td className="py-3.5 px-3.5 whitespace-nowrap">
+                      {exam.securityGateStatus === 'PASSED' || exam.securityGateStatus === 'WARNING_PASSED' || (exam.isUsed && exam.securityGateStatus !== 'REJECTED') ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-xs">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>TERKONFIRMASI • PASSED</span>
+                          </span>
+                          <div className="text-[11px] text-slate-600 space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-400">Petugas:</span>
+                              <strong className="text-slate-900 font-bold">{exam.securityOfficerName || 'Security'}</strong>
+                            </div>
+                            {exam.securityCheckedAt && (
+                              <div className="font-mono text-[10px] text-slate-500">
+                                {new Date(exam.securityCheckedAt).toLocaleDateString('id-ID')} {new Date(exam.securityCheckedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                              </div>
+                            )}
+                            {exam.vehiclePlateNumber && (
+                              <div className="font-mono font-bold text-amber-700 text-[10px]">
+                                Plat: {exam.vehiclePlateNumber}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : exam.securityGateStatus === 'REJECTED' ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-300 shadow-xs">
+                            <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                            <span>TERKONFIRMASI • DITAHAN</span>
+                          </span>
+                          <div className="text-[11px] text-slate-600 space-y-0.5">
+                            <div className="flex items-center gap-1">
+                              <span className="text-slate-400">Petugas:</span>
+                              <strong className="text-slate-900 font-bold">{exam.securityOfficerName || 'Security'}</strong>
+                            </div>
+                            {exam.securityCheckedAt && (
+                              <div className="font-mono text-[10px] text-slate-500">
+                                {new Date(exam.securityCheckedAt).toLocaleDateString('id-ID')} {new Date(exam.securityCheckedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500 border border-slate-200">
+                          <Clock className="w-3 h-3 text-slate-400" />
+                          <span>Belum Verifikasi Security</span>
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3.5 px-3.5 text-slate-700 max-w-[140px] truncate" title={exam.examinerName}>
                       {exam.examinerName}
                     </td>
                     <td className="py-3.5 px-3.5 pr-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => setSelectedCardExam(exam)}
+                          className="p-1.5 text-blue-600 hover:text-white hover:bg-blue-600 bg-blue-50 rounded-lg transition cursor-pointer"
+                          title="Lihat Kartu Digital & WhatsApp"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => onSelectExamination(exam, false)}
                           className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
@@ -806,6 +936,18 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </div>
         </div>
       )}
+
+      {/* Digital Tenko Card Modal */}
+      <DigitalTenkoCardModal
+        isOpen={!!selectedCardExam}
+        onClose={() => setSelectedCardExam(null)}
+        examination={selectedCardExam}
+        onPrint={() => {
+          if (selectedCardExam) {
+            onSelectExamination(selectedCardExam, true);
+          }
+        }}
+      />
     </div>
   );
 };

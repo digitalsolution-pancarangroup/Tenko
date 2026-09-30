@@ -167,10 +167,14 @@ export const MasterNakesPage: React.FC = () => {
 
   return (
     <div id="master-nakes-view" className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
-        <div>
-          <h2 className="text-xl font-black text-slate-900 tracking-tight">Master Tenaga Kesehatan (Nakes)</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Kelola data petugas medis, nomor SIP, dan kontak pemeriksa</p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Master Tenaga Kesehatan
+          </h1>
+          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold whitespace-nowrap">
+            {nakesList.length} Petugas
+          </span>
         </div>
 
         <button

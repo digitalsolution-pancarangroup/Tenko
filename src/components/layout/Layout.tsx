@@ -33,7 +33,7 @@ export const Layout: React.FC<LayoutProps> = ({
           onOpenMobileMenu={() => setIsOpenMobile(true)}
         />
 
-        <main className="flex-1 p-4 md:p-8 print:p-0 max-w-7xl print:max-w-none w-full mx-auto">
+        <main className="flex-1 p-4 md:p-6 lg:p-8 print:p-0 w-full min-w-0">
           {children}
         </main>
       </div>

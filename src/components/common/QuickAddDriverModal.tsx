@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, AlertCircle, Check, Loader2, Plus } from 'lucide-react';
+import { X, UserPlus, AlertCircle, Check, Loader2, Plus, Phone } from 'lucide-react';
 import { Driver, DriverGroup, DriverPosition } from '../../types';
 import { createDriver } from '../../services/driverService';
 import { getDriverGroups } from '../../services/masterService';
@@ -27,6 +27,7 @@ export const QuickAddDriverModal: React.FC<QuickAddDriverModalProps> = ({
 
   const [driverId, setDriverId] = useState(initialDriverId);
   const [fullName, setFullName] = useState(initialFullName);
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [driverGroupId, setDriverGroupId] = useState('');
   const [position, setPosition] = useState<DriverPosition>('DRIVER');
   const [joinDate, setJoinDate] = useState(new Date().toISOString().split('T')[0]);
@@ -39,6 +40,7 @@ export const QuickAddDriverModal: React.FC<QuickAddDriverModalProps> = ({
     if (isOpen) {
       setDriverId(initialDriverId);
       setFullName(initialFullName);
+      setPhoneNumber('');
       setErrorMsg('');
       loadGroups();
     }
@@ -87,6 +89,7 @@ export const QuickAddDriverModal: React.FC<QuickAddDriverModalProps> = ({
         {
           driverId: driverId.trim().toUpperCase(),
           fullName: fullName.trim(),
+          phoneNumber: phoneNumber.trim(),
           driverGroupId,
           position,
           joinDate,
@@ -210,6 +213,26 @@ export const QuickAddDriverModal: React.FC<QuickAddDriverModalProps> = ({
               className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 text-sm font-medium"
               required
             />
+          </div>
+
+          <div>
+            <label className="block font-medium text-slate-700 mb-1 text-xs uppercase tracking-wider">
+              Nomor WhatsApp / HP
+            </label>
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-emerald-600">
+                <Phone className="w-4 h-4" />
+              </div>
+              <input
+                id="input-new-driver-phone"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="Contoh: 081234567890"
+                className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-600 text-sm font-mono"
+              />
+            </div>
+            <p className="text-[11px] text-slate-500 mt-1">Digunakan untuk kirim Kartu Tenko digital via WhatsApp.</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

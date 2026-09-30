@@ -19,8 +19,11 @@ import { MasterNakesPage } from './pages/master/MasterNakesPage';
 import { DriverHealthPage } from './pages/health/DriverHealthPage';
 import { MedicalInventoryPage } from './pages/inventory/MedicalInventoryPage';
 import { UserManagementPage } from './pages/users/UserManagementPage';
-import { AuditLogsPage } from './pages/audit/AuditLogsPage';
 import { PrintableTenkoReport } from './components/print/PrintableTenkoReport';
+import { SecurityGateVerificationPage } from './pages/security/SecurityGateVerificationPage';
+import { AttendanceLogPage } from './pages/attendance/AttendanceLogPage';
+import { AssessmentReportPage } from './pages/report/AssessmentReportPage';
+import { DriverTenkoCardView } from './pages/public/DriverTenkoCardView';
 import { TenkoExamination } from './types';
 import { seedInitialMasterData } from './services/seedData';
 import { Loader2 } from 'lucide-react';
@@ -31,11 +34,93 @@ const MainAppContent: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<NavigationPage>('nakes_dashboard');
   const [returnPage, setReturnPage] = useState<NavigationPage>('data_tenko');
   const [selectedExamination, setSelectedExamination] = useState<TenkoExamination | null>(null);
+  const [preselectedDriverId, setPreselectedDriverId] = useState<string | undefined>(undefined);
+
+  // Check URL query parameters for public QR Scan / Verification / Driver Pass
+  const [publicVerifyId, setPublicVerifyId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      return params.get('pass') || params.get('card') || params.get('verify') || null;
+    }
+    return null;
+  });
+
+  const [isDriverCardMode, setIsDriverCardMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const passParam = params.get('pass') || params.get('card');
+      const verifyParam = params.get('verify');
+      const scanParam = params.get('scan');
+      if (passParam) return true;
+      if (verifyParam && scanParam !== 'true' && scanParam !== 'gate') return true;
+    }
+    return false;
+  });
+
+  const [isSecurityGateScanMode, setIsSecurityGateScanMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const scanParam = params.get('scan');
+      return scanParam === 'true' || scanParam === 'gate';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const passParam = params.get('pass') || params.get('card');
+      const verifyParam = params.get('verify');
+      const scanParam = params.get('scan');
+
+      if (scanParam === 'true' || scanParam === 'gate') {
+        setPublicVerifyId(verifyParam || passParam || null);
+        setIsSecurityGateScanMode(true);
+        setIsDriverCardMode(false);
+      } else if (passParam) {
+        setPublicVerifyId(passParam);
+        setIsDriverCardMode(true);
+        setIsSecurityGateScanMode(false);
+      } else if (verifyParam) {
+        setPublicVerifyId(verifyParam);
+        setIsDriverCardMode(true);
+        setIsSecurityGateScanMode(false);
+      }
+    }
+  }, []);
 
   // Initialize seed data once on mount
   useEffect(() => {
     seedInitialMasterData();
   }, []);
+
+  // 1. DEDICATED DRIVER DIGITAL TENKO CARD VIEW (Clean ID Card view for driver's phone via WhatsApp link)
+  if (isDriverCardMode && publicVerifyId) {
+    return (
+      <DriverTenkoCardView
+        initialTenkoId={publicVerifyId}
+      />
+    );
+  }
+
+  // 2. DEDICATED SECURITY GATE CLEARANCE PORTAL (For Gate Officers scanning driver QR codes)
+  if (isSecurityGateScanMode) {
+    return (
+      <SecurityGateVerificationPage
+        initialTenkoId={publicVerifyId || undefined}
+        isStandalonePublicView={true}
+        onBackToApp={() => {
+          setIsSecurityGateScanMode(false);
+          setIsDriverCardMode(false);
+          setPublicVerifyId(null);
+          // Remove query params from url cleanly
+          if (window.history.pushState) {
+            window.history.pushState({}, document.title, window.location.pathname);
+          }
+        }}
+      />
+    );
+  }
 
   // Update default landing page based on role when user logs in
   useEffect(() => {
@@ -90,6 +175,10 @@ const MainAppContent: React.FC = () => {
           <NakesDashboard
             onNavigate={(p) => setCurrentPage(p)}
             onSelectExamination={handleSelectExamination}
+            onStartExaminationWithDriver={(driverId) => {
+              setPreselectedDriverId(driverId);
+              setCurrentPage('new_examination');
+            }}
           />
         )}
 
@@ -98,14 +187,23 @@ const MainAppContent: React.FC = () => {
           <SuperAdminDashboard
             onNavigate={(p) => setCurrentPage(p)}
             onSelectExamination={handleSelectExamination}
+            onStartExaminationWithDriver={(driverId) => {
+              setPreselectedDriverId(driverId);
+              setCurrentPage('new_examination');
+            }}
           />
         )}
 
         {/* VIEW 3: 6-Step Examination Form */}
         {currentPage === 'new_examination' && (
           <NewExaminationStepper
-            onSuccess={handleExaminationCreated}
+            initialDriverId={preselectedDriverId}
+            onSuccess={(createdExam) => {
+              setPreselectedDriverId(undefined);
+              handleExaminationCreated(createdExam);
+            }}
             onCancel={() => {
+              setPreselectedDriverId(undefined);
               if (currentUser.role === 'SUPER_ADMIN') {
                 setCurrentPage('superadmin_dashboard');
               } else {
@@ -149,6 +247,29 @@ const MainAppContent: React.FC = () => {
           />
         )}
 
+        {/* VIEW 6-ATTENDANCE: Attendance Log (Absensi Driver ERP vs TENKO) */}
+        {currentPage === 'attendance_log' && (
+          <AttendanceLogPage
+            onStartExaminationWithDriver={(driverId) => {
+              setPreselectedDriverId(driverId);
+              setCurrentPage('new_examination');
+            }}
+            onNavigate={(p) => setCurrentPage(p)}
+          />
+        )}
+
+        {/* VIEW 6-REPORT: Assessment Report (Result Tenko Assessment) */}
+        {currentPage === 'assessment_report' && (
+          <AssessmentReportPage
+            onSelectExamination={handleSelectExamination}
+          />
+        )}
+
+        {/* VIEW 6-SECURITY: Security Gate Verification Portal */}
+        {currentPage === 'security_gate' && (
+          <SecurityGateVerificationPage />
+        )}
+
         {/* VIEW 6B: Driver Health (Monitoring Keluhan & Evaluasi Nakes) */}
         {currentPage === 'driver_health' && <DriverHealthPage />}
 
@@ -173,10 +294,7 @@ const MainAppContent: React.FC = () => {
         {/* VIEW 10: User Management (Consolidates Nakes, Super Admin, Security) */}
         {(currentPage === 'user_management' || currentPage === 'master_nakes') && <UserManagementPage />}
 
-        {/* VIEW 11: Audit Logs */}
-        {currentPage === 'audit_logs' && <AuditLogsPage />}
-
-        {/* VIEW 12: Dedicated Printable TENKO Report View */}
+        {/* VIEW 11: Dedicated Printable TENKO Report View */}
         {currentPage === 'print_examination' && selectedExamination && (
           <PrintableTenkoReport
             examination={selectedExamination}

@@ -296,12 +296,12 @@ export const UserManagementPage: React.FC = () => {
     <div id="user-management-view" className="space-y-6">
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-xs font-bold">
-            {usersList.length} Akun Terdaftar
-          </span>
-          <span className="text-xs text-slate-400 font-medium">
-            (Menampilkan {filteredUsers.length} hasil filter)
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Manajemen Pengguna
+          </h1>
+          <span className="px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-xs font-bold whitespace-nowrap">
+            {usersList.length} Akun
           </span>
         </div>
 
@@ -313,45 +313,6 @@ export const UserManagementPage: React.FC = () => {
           <Plus className="w-4 h-4" />
           <span>+ Tambah User Baru</span>
         </button>
-      </div>
-
-      {/* Summary KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total User</span>
-            <Users className="w-4 h-4 text-slate-400" />
-          </div>
-          <p className="text-2xl font-black text-slate-900 mt-2">{stats.total}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{stats.activeCount} akun berstatus aktif</p>
-        </div>
-
-        <div className="bg-purple-50/50 p-4 rounded-2xl border border-purple-200/70 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-purple-700 uppercase tracking-wider">Super Admin</span>
-            <ShieldCheck className="w-4 h-4 text-purple-600" />
-          </div>
-          <p className="text-2xl font-black text-purple-900 mt-2">{stats.adminCount}</p>
-          <p className="text-[11px] text-purple-600/80 mt-0.5">Kontrol penuh sistem & data</p>
-        </div>
-
-        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-200/70 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-blue-700 uppercase tracking-wider">Tenaga Medis</span>
-            <Stethoscope className="w-4 h-4 text-blue-600" />
-          </div>
-          <p className="text-2xl font-black text-blue-900 mt-2">{stats.nakesCount}</p>
-          <p className="text-[11px] text-blue-600/80 mt-0.5">Pemeriksaan fisik & import data</p>
-        </div>
-
-        <div className="bg-emerald-50/50 p-4 rounded-2xl border border-emerald-200/70 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-700 uppercase tracking-wider">Security / Posko</span>
-            <Shield className="w-4 h-4 text-emerald-600" />
-          </div>
-          <p className="text-2xl font-black text-emerald-900 mt-2">{stats.securityCount}</p>
-          <p className="text-[11px] text-emerald-600/80 mt-0.5">Screening gerbang & cek status</p>
-        </div>
       </div>
 
       {/* Role Filter Tabs & Search Controls */}

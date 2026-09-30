@@ -184,12 +184,12 @@ export const MasterDriverGroupsPage: React.FC = () => {
     <div id="master-driver-groups-view" className="space-y-6">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold">
-            {groups.length} Driver Group
-          </span>
-          <span className="text-xs text-slate-400 font-medium">
-            (Menampilkan {filteredGroups.length} aktif / filter)
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Master Driver Groups
+          </h1>
+          <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold whitespace-nowrap">
+            {groups.length} Group
           </span>
         </div>
 

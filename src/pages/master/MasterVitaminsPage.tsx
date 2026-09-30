@@ -168,22 +168,14 @@ export const MasterVitaminsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 shrink-0">
-            <Pill className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black text-slate-900 tracking-tight">Master Data Vitamin & Suplemen</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                {vitamins.length} Jenis
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">
-              Daftar persediaan vitamin, suplemen vitalitas, dan obat pertolongan pertama yang diberikan nakes kepada driver saat terdeteksi keluhan atau kondisi kurang fit.
-            </p>
-          </div>
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            Master Data Vitamin
+          </h1>
+          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+            {vitamins.length} Jenis
+          </span>
         </div>
 
         <button
