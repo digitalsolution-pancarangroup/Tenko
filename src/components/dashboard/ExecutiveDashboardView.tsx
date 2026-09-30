@@ -6,7 +6,6 @@ import {
   DriverGroup,
   Location,
   AttendanceLogItem,
-  ExaminationRecommendation,
 } from '../../types';
 import { getTenkoExaminations } from '../../services/tenkoService';
 import { getDrivers } from '../../services/driverService';
@@ -25,21 +24,16 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
-  Activity,
-  HeartPulse,
-  Thermometer,
   ShieldCheck,
   ChevronLeft,
   ChevronRight,
   ClipboardPlus,
   MessageCircle,
   Eye,
-  SlidersHorizontal,
-  FileSpreadsheet,
   AlertCircle,
   UserCheck,
-  UserX,
   TrendingUp,
+  MapPin,
 } from 'lucide-react';
 import {
   BarChart,
@@ -89,14 +83,15 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   const [tableResultPage, setTableResultPage] = useState(1);
   const tableResultPerPage = 7;
 
-  // Filters for Table 4 (Attendance Log Driver/Kenek Belum Absen)
-  const [tableAbsenSearch, setTableAbsenSearch] = useState('');
-  const [tableAbsenTab, setTableAbsenTab] = useState<'BELUM_ABSEN' | 'SUDAH_ABSEN_BELUM_TENKO'>('BELUM_ABSEN');
-  const [tableAbsenPage, setTableAbsenPage] = useState(1);
-  const tableAbsenPerPage = 7;
-
   // Current Date Strings
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  // Filters for Table 4 (Attendance Log Driver/Kenek Yang Absen di Hari Ini)
+  const [tableAbsenSearch, setTableAbsenSearch] = useState('');
+  const [tableAbsenTab, setTableAbsenTab] = useState<'ALL' | 'PENDING' | 'DONE'>('ALL');
+  const [tableAbsenDate, setTableAbsenDate] = useState<string>(todayStr);
+  const [tableAbsenPage, setTableAbsenPage] = useState(1);
+  const tableAbsenPerPage = 7;
 
   const formattedToday = useMemo(() => {
     return new Intl.DateTimeFormat('id-ID', {
@@ -143,6 +138,16 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     }
   };
 
+  // Available dates with attendance logs
+  const availableAttendanceDates = useMemo(() => {
+    const dates = Array.from(new Set(attendanceLogs.map((l) => l.logDate))).filter(Boolean);
+    if (!dates.includes(todayStr)) {
+      dates.push(todayStr);
+    }
+    dates.sort().reverse();
+    return dates;
+  }, [attendanceLogs, todayStr]);
+
   // =========================================================================
   // 1. DATA PERHITUNGAN CHART 1: BARCHART RESULT PER BULAN
   // =========================================================================
@@ -152,7 +157,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
     ];
 
-    // Filter examinations by selected year
     const examsInYear = examinations.filter((exam) => {
       const dateStr = exam.examinationDate || '';
       return dateStr.startsWith(String(selectedYear));
@@ -213,7 +217,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         month: 'short',
       }).format(d);
 
-      // Attendance on this date (distinct drivers clocked IN, fingerFlag === 1)
       const dayLogs = attendanceLogs.filter(
         (log) => log.logDate === dateStr && Number(log.fingerFlag) === 1
       );
@@ -222,7 +225,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       );
       const attendanceCount = uniqueAttendedDrivers.size;
 
-      // Tenko exams on this date
       const dayExams = examinations.filter((exam) => exam.examinationDate === dateStr);
       const uniqueTenkoDrivers = new Set(
         dayExams.map((exam) => String(exam.driverId || '').trim().toUpperCase())
@@ -251,7 +253,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     const currentMonthPrefix = todayStr.slice(0, 7);
 
     return examinations.filter((exam) => {
-      // Date filter
       if (tableResultFilterDate === 'TODAY' && exam.examinationDate !== todayStr) {
         return false;
       }
@@ -259,7 +260,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         return false;
       }
 
-      // Recommendation filter
       if (tableResultFilterRec !== 'ALL') {
         const rec = (exam.recommendation || '').toUpperCase();
         if (tableResultFilterRec === 'FIT' && (rec !== 'FIT TO WORK' && !rec.startsWith('FIT TO WORK'))) return false;
@@ -267,7 +267,6 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         if (tableResultFilterRec === 'UNFIT' && !rec.includes('UNFIT')) return false;
       }
 
-      // Search keyword
       if (searchLower) {
         const matchId = (exam.tenkoId || '').toLowerCase().includes(searchLower);
         const matchDriverId = (exam.driverId || '').toLowerCase().includes(searchLower);
@@ -291,116 +290,114 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   const totalResultTenkoPages = Math.max(1, Math.ceil(filteredResultTenko.length / tableResultPerPage));
 
   // =========================================================================
-  // 4. DATA PERHITUNGAN TABEL 4: ATTENDANCE LOG DRIVER / KENEK BELUM ABSEN
+  // 4. DATA PERHITUNGAN TABEL 4: ATTENDANCE LOG DRIVER / KENEK YANG ABSEN HARI INI
   // =========================================================================
-  const { driversBelumAbsenHariIni, driversSudahAbsenBelumTenko } = useMemo(() => {
-    // 1. Get all clock-in logs for today
-    const todayLogs = attendanceLogs.filter(
-      (log) => log.logDate === todayStr && Number(log.fingerFlag) === 1
-    );
+  const attendedDriversList = useMemo(() => {
+    const targetDate = tableAbsenDate || todayStr;
 
-    // Map of driver ID to log
-    const attendedDriverMap = new Map<string, AttendanceLogItem>();
-    todayLogs.forEach((log) => {
+    // 1. Filter attendance logs for targetDate
+    const dailyLogs = attendanceLogs.filter((log) => log.logDate === targetDate);
+
+    // Map to distinct driver by userCode (preferring clock-in log / fingerFlag === 1)
+    const driverLogMap = new Map<string, AttendanceLogItem>();
+    dailyLogs.forEach((log) => {
       const code = String(log.userCode || '').trim().toUpperCase();
-      if (code) attendedDriverMap.set(code, log);
-    });
-
-    // 2. Get all tenko examinations for today
-    const todayExams = examinations.filter((exam) => exam.examinationDate === todayStr);
-    const tenkoDriverSet = new Set(
-      todayExams.map((exam) => String(exam.driverId || '').trim().toUpperCase())
-    );
-
-    // 3. Active drivers from master data
-    const activeDrivers = drivers.filter(
-      (d) => (d.status || 'ACTIVE').toUpperCase() === 'ACTIVE'
-    );
-
-    // List 1: Belum Absen Hari Ini (Driver / Kenek registered who have NO attendance in today)
-    const belumAbsenList: Array<{
-      driver: Driver;
-      statusText: string;
-    }> = [];
-
-    activeDrivers.forEach((drv) => {
-      const cleanId = String(drv.driverId || '').trim().toUpperCase();
-      if (!attendedDriverMap.has(cleanId)) {
-        belumAbsenList.push({
-          driver: drv,
-          statusText: 'Belum Clock In',
-        });
+      if (!code) return;
+      const existing = driverLogMap.get(code);
+      if (!existing) {
+        driverLogMap.set(code, log);
+      } else if (Number(existing.fingerFlag) !== 1 && Number(log.fingerFlag) === 1) {
+        driverLogMap.set(code, log);
       }
     });
 
-    // List 2: Sudah Absen tapi Belum TENKO (Clocked in, but no TENKO record today)
-    const sudahAbsenBelumTenkoList: Array<{
-      driver?: Driver;
+    // 2. Filter tenko examinations on targetDate
+    const dailyExams = examinations.filter((exam) => exam.examinationDate === targetDate);
+    const examMap = new Map<string, TenkoExamination>();
+    dailyExams.forEach((exam) => {
+      const code = String(exam.driverId || '').trim().toUpperCase();
+      if (code) examMap.set(code, exam);
+    });
+
+    // 3. Driver master lookup
+    const masterMap = new Map<string, Driver>();
+    drivers.forEach((drv) => {
+      const code = String(drv.driverId || '').trim().toUpperCase();
+      if (code) masterMap.set(code, drv);
+    });
+
+    // 4. Combine into list of attended drivers
+    const result: Array<{
+      logDocumentId?: string;
       userCode: string;
       driverName: string;
       logTime: string;
       siteName: string;
-      phoneNumber?: string;
+      fingerFlag: number;
       position: string;
-      driverGroup?: string;
+      driverGroup: string;
+      phoneNumber?: string;
+      hasTenko: boolean;
+      tenkoExam?: TenkoExamination;
+      tenkoRecommendation?: string;
+      tenkoTime?: string;
     }> = [];
 
-    attendedDriverMap.forEach((log, code) => {
-      if (!tenkoDriverSet.has(code)) {
-        // Find in master driver
-        const master = activeDrivers.find(
-          (d) => String(d.driverId || '').trim().toUpperCase() === code
-        );
+    driverLogMap.forEach((log, code) => {
+      const master = masterMap.get(code);
+      const tenko = examMap.get(code);
 
-        let cleanName = log.driverName;
-        if (cleanName.includes('-')) {
-          const parts = cleanName.split('-');
-          if (parts.length >= 2) cleanName = parts.slice(1).join('-').trim();
-        }
-
-        sudahAbsenBelumTenkoList.push({
-          driver: master,
-          userCode: code,
-          driverName: master?.fullName || cleanName || log.driverName,
-          logTime: log.logTime || '-',
-          siteName: log.siteName || '-',
-          phoneNumber: master?.phoneNumber,
-          position: master?.position || 'DRIVER',
-          driverGroup: master?.driverGroupId || '-',
-        });
+      let cleanName = log.driverName;
+      if (cleanName.includes('-')) {
+        const parts = cleanName.split('-');
+        if (parts.length >= 2) cleanName = parts.slice(1).join('-').trim();
       }
+
+      result.push({
+        logDocumentId: log.logDocumentId,
+        userCode: code,
+        driverName: master?.fullName || cleanName || log.driverName,
+        logTime: log.logTime || '-',
+        siteName: log.siteName || '-',
+        fingerFlag: log.fingerFlag,
+        position: master?.position || 'DRIVER',
+        driverGroup: master?.driverGroupId || tenko?.driverGroupSnapshot || '-',
+        phoneNumber: master?.phoneNumber,
+        hasTenko: !!tenko,
+        tenkoExam: tenko,
+        tenkoRecommendation: tenko?.recommendation,
+        tenkoTime: tenko?.finishTime || tenko?.createdAt,
+      });
     });
 
-    return {
-      driversBelumAbsenHariIni: belumAbsenList,
-      driversSudahAbsenBelumTenko: sudahAbsenBelumTenkoList,
-    };
-  }, [attendanceLogs, examinations, drivers, todayStr]);
+    // Sort by logTime descending
+    result.sort((a, b) => (b.logTime || '').localeCompare(a.logTime || ''));
+
+    return result;
+  }, [attendanceLogs, examinations, drivers, tableAbsenDate, todayStr]);
 
   // Filtered & Paginated Table 4 Data
   const filteredTableAbsen = useMemo(() => {
     const searchLower = tableAbsenSearch.trim().toLowerCase();
 
-    if (tableAbsenTab === 'BELUM_ABSEN') {
-      return driversBelumAbsenHariIni.filter(({ driver }) => {
-        if (!searchLower) return true;
-        const matchId = (driver.driverId || '').toLowerCase().includes(searchLower);
-        const matchName = (driver.fullName || '').toLowerCase().includes(searchLower);
-        const matchGroup = (driver.driverGroupId || '').toLowerCase().includes(searchLower);
-        const matchPos = (driver.position || '').toLowerCase().includes(searchLower);
-        return matchId || matchName || matchGroup || matchPos;
-      });
-    } else {
-      return driversSudahAbsenBelumTenko.filter((item) => {
-        if (!searchLower) return true;
+    return attendedDriversList.filter((item) => {
+      // Tab filter: ALL | PENDING (Belum Tenko) | DONE (Sudah Tenko)
+      if (tableAbsenTab === 'PENDING' && item.hasTenko) return false;
+      if (tableAbsenTab === 'DONE' && !item.hasTenko) return false;
+
+      // Keyword search
+      if (searchLower) {
         const matchId = item.userCode.toLowerCase().includes(searchLower);
         const matchName = item.driverName.toLowerCase().includes(searchLower);
-        const matchGroup = (item.driverGroup || '').toLowerCase().includes(searchLower);
+        const matchGroup = item.driverGroup.toLowerCase().includes(searchLower);
         const matchPos = item.position.toLowerCase().includes(searchLower);
-        return matchId || matchName || matchGroup || matchPos;
-      });
-    }
-  }, [driversBelumAbsenHariIni, driversSudahAbsenBelumTenko, tableAbsenTab, tableAbsenSearch]);
+        const matchSite = item.siteName.toLowerCase().includes(searchLower);
+        return matchId || matchName || matchGroup || matchPos || matchSite;
+      }
+
+      return true;
+    });
+  }, [attendedDriversList, tableAbsenTab, tableAbsenSearch]);
 
   const paginatedTableAbsen = useMemo(() => {
     const startIdx = (tableAbsenPage - 1) * tableAbsenPerPage;
@@ -408,6 +405,11 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   }, [filteredTableAbsen, tableAbsenPage]);
 
   const totalTableAbsenPages = Math.max(1, Math.ceil(filteredTableAbsen.length / tableAbsenPerPage));
+
+  // Total counts for tabs
+  const countTotalAttended = attendedDriversList.length;
+  const countBelumTenko = useMemo(() => attendedDriversList.filter((d) => !d.hasTenko).length, [attendedDriversList]);
+  const countSudahTenko = useMemo(() => attendedDriversList.filter((d) => d.hasTenko).length, [attendedDriversList]);
 
   // Quick stats for top KPI cards
   const statsToday = useMemo(() => {
@@ -422,8 +424,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
 
     const totalAttended = attendedDriverIds.size;
     const totalTenko = todayExams.length;
-    const totalBelumAbsen = driversBelumAbsenHariIni.length;
-    const totalBelumTenko = driversSudahAbsenBelumTenko.length;
+    const totalPendingTenko = Math.max(0, totalAttended - totalTenko);
 
     const complianceRate =
       totalAttended > 0 ? Math.round((totalTenko / totalAttended) * 100) : 0;
@@ -432,11 +433,10 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       totalDrivers: drivers.length,
       totalAttended,
       totalTenko,
-      totalBelumAbsen,
-      totalBelumTenko,
+      totalPendingTenko,
       complianceRate,
     };
-  }, [examinations, attendanceLogs, drivers, todayStr, driversBelumAbsenHariIni, driversSudahAbsenBelumTenko]);
+  }, [examinations, attendanceLogs, drivers, todayStr]);
 
   // Send WhatsApp Reminder
   const handleSendWhatsAppReminder = (phone?: string, name?: string, reason?: string) => {
@@ -447,7 +447,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     }
     const message = encodeURIComponent(
       `Halo Sdr. ${name || 'Rekan Driver'},\n\nAnda terdata ${
-        reason || 'belum melakukan absensi masuk / pemeriksaan kesehatan TENKO'
+        reason || 'sudah melakukan absensi masuk tetapi belum menjalani pemeriksaan kesehatan TENKO'
       } pada hari ini (${formattedToday}).\n\nMohon segera melapor ke Pos / Klinik TENKO Hub Operasional sebelum bertugas.\n\nTerima kasih atas kerja samanya.\n*Pancaran Logistics - Keselamatan Kerja Bersama*`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
@@ -478,18 +478,22 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     const ws1 = XLSX.utils.json_to_sheet(examsExport);
     XLSX.utils.book_append_sheet(wb, ws1, 'Hasil_TENKO');
 
-    // Sheet 2: Belum Absen
-    const belumAbsenExport = driversBelumAbsenHariIni.map((item, idx) => ({
+    // Sheet 2: Absen Hari Ini
+    const absenHariIniExport = attendedDriversList.map((item, idx) => ({
       No: idx + 1,
-      'NIK Driver': item.driver.driverId,
-      'Nama Lengkap': item.driver.fullName,
-      Posisi: item.driver.position,
-      Grup: item.driver.driverGroupId || '-',
-      Telepon: item.driver.phoneNumber || '-',
-      'Status Hari Ini': 'Belum Absen Masuk',
+      'Waktu Absen': item.logTime,
+      'Site / Pos': item.siteName,
+      'NIK Driver': item.userCode,
+      'Nama Lengkap': item.driverName,
+      Posisi: item.position,
+      Grup: item.driverGroup,
+      Telepon: item.phoneNumber || '-',
+      'Status TENKO': item.hasTenko ? 'Sudah TENKO' : 'Menunggu TENKO',
+      'Hasil Rekomendasi': item.tenkoRecommendation || '-',
+      'Waktu Selesai TENKO': item.tenkoTime || '-',
     }));
-    const ws2 = XLSX.utils.json_to_sheet(belumAbsenExport);
-    XLSX.utils.book_append_sheet(wb, ws2, 'Belum_Absen_Hari_Ini');
+    const ws2 = XLSX.utils.json_to_sheet(absenHariIniExport);
+    XLSX.utils.book_append_sheet(wb, ws2, 'Absensi_Hari_Ini');
 
     XLSX.writeFile(wb, `Laporan_Dashboard_TENKO_${todayStr}.xlsx`);
   };
@@ -520,7 +524,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
             id="btn-dashboard-refresh"
             onClick={() => loadAllDashboardData(true)}
             disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs disabled:opacity-60"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-blue-600' : 'text-slate-500'}`} />
             <span>{isRefreshing ? 'Sinkronisasi...' : 'Refresh Data'}</span>
@@ -530,7 +534,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
             type="button"
             id="btn-dashboard-unduh-excel"
             onClick={handleExportAllToExcel}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs"
           >
             <Download className="w-3.5 h-3.5 text-emerald-600" />
             <span>Unduh Laporan</span>
@@ -540,7 +544,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
             type="button"
             id="btn-dashboard-pemeriksaan-baru"
             onClick={() => onNavigate('new_examination')}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0B5FA5] hover:bg-[#094d87] text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#0B5FA5] hover:bg-[#094d87] text-white text-xs font-semibold rounded-xl transition cursor-pointer shadow-xs"
           >
             <ClipboardPlus className="w-3.5 h-3.5" />
             <span>Pemeriksaan Baru</span>
@@ -581,7 +585,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         {/* Card 3: Sudah TENKO Hari Ini */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Pemeriksaan TENKO</span>
+            <span className="text-xs font-semibold text-slate-500">Selesai TENKO Hari Ini</span>
             <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
               <ShieldCheck className="w-4 h-4" />
             </span>
@@ -589,28 +593,28 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
           <div className="font-mono font-bold text-2xl text-indigo-700 mt-2">
             {statsToday.totalTenko}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Selesai Diperiksa Nakes</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">Diperiksa oleh Nakes</span>
         </div>
 
-        {/* Card 4: Belum Absen Hari Ini */}
+        {/* Card 4: Menunggu TENKO Hari Ini */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-500">Belum Absen Hari Ini</span>
-            <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
-              <UserX className="w-4 h-4" />
+            <span className="text-xs font-semibold text-slate-500">Menunggu TENKO</span>
+            <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
+              <AlertCircle className="w-4 h-4" />
             </span>
           </div>
-          <div className="font-mono font-bold text-2xl text-rose-600 mt-2">
-            {statsToday.totalBelumAbsen}
+          <div className="font-mono font-bold text-2xl text-amber-600 mt-2">
+            {statsToday.totalPendingTenko}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Driver Belum Clock-in</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">Sudah Clock-in Belum TENKO</span>
         </div>
 
         {/* Card 5: Tingkat Kepatuhan (Compliance) */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs col-span-2 sm:col-span-1">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">Kepatuhan TENKO</span>
-            <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg">
+            <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
               <TrendingUp className="w-4 h-4" />
             </span>
           </div>
@@ -618,7 +622,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
             <span>{statsToday.complianceRate}%</span>
           </div>
           <span className="text-[11px] text-slate-400 mt-1 block">
-            {statsToday.totalBelumTenko} Driver Menunggu Tenko
+            {statsToday.totalTenko} dari {statsToday.totalAttended} Absen
           </span>
         </div>
       </div>
@@ -844,7 +848,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* DUAL TABLE ROW: 3. RESULT DATA TENKO (LEFT) | 4. DRIVER BELUM ABSEN (RIGHT) */}
+      {/* DUAL TABLE ROW: 3. RESULT DATA TENKO (LEFT) | 4. DRIVER ABSEN HARI INI (RIGHT) */}
       {/* ========================================================================= */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {/* ================= TABLE 3: DATABASE RESULT DATA TENKO ================= */}
@@ -1077,62 +1081,98 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
           </div>
         </div>
 
-        {/* ================= TABLE 4: ATTENDANCE LOG DRIVER / KENEK BELUM ABSEN ================= */}
+        {/* ================= TABLE 4: ATTENDANCE LOG DRIVER / KENEK YANG ABSEN HARI INI ================= */}
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs flex flex-col">
           {/* Card Header */}
           <div className="p-4 sm:p-5 border-b border-slate-100">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
                   <h2 className="text-sm font-bold text-slate-900">
-                    4. Driver &amp; Kenek yang Belum Absen Hari Ini
+                    4. Data Attendance Log Driver &amp; Kenek yang Absen Hari Ini
                   </h2>
                 </div>
                 <p className="text-[11.5px] text-slate-500 mt-0.5">
-                  Daftar personil pengemudi aktif yang belum tercatat clock-in pada hari ini
+                  Daftar personil pengemudi yang melakukan absensi masuk (clock-in) pada hari ini
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => onNavigate('attendance_log')}
-                className="text-xs font-semibold text-blue-700 hover:underline cursor-pointer self-start sm:self-auto shrink-0"
-              >
-                Buka Log Absensi &rarr;
-              </button>
+              <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                {/* Date switcher if needed */}
+                {availableAttendanceDates.length > 1 && (
+                  <select
+                    value={tableAbsenDate}
+                    onChange={(e) => {
+                      setTableAbsenDate(e.target.value);
+                      setTableAbsenPage(1);
+                    }}
+                    aria-label="Pilih tanggal log absensi"
+                    className="text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 cursor-pointer"
+                  >
+                    {availableAttendanceDates.map((d) => (
+                      <option key={d} value={d}>
+                        {d === todayStr ? `Hari Ini (${d})` : d}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => onNavigate('attendance_log')}
+                  className="text-xs font-semibold text-blue-700 hover:underline cursor-pointer"
+                >
+                  Buka Log Absensi &rarr;
+                </button>
+              </div>
             </div>
 
-            {/* Tab switch between "Belum Absen Hari Ini" and "Sudah Absen tapi Belum TENKO" */}
+            {/* Filter Tabs: Semua Absen | Belum TENKO | Sudah TENKO */}
             <div className="mt-3 flex items-center gap-2 border-b border-slate-200 pb-2">
               <button
                 type="button"
                 onClick={() => {
-                  setTableAbsenTab('BELUM_ABSEN');
+                  setTableAbsenTab('ALL');
                   setTableAbsenPage(1);
                 }}
                 className={`text-xs font-bold pb-1 relative transition cursor-pointer ${
-                  tableAbsenTab === 'BELUM_ABSEN'
-                    ? 'text-rose-600 border-b-2 border-rose-600'
+                  tableAbsenTab === 'ALL'
+                    ? 'text-blue-700 border-b-2 border-blue-700'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Belum Absen Hari Ini ({driversBelumAbsenHariIni.length})
+                Semua Absen ({countTotalAttended})
               </button>
 
               <button
                 type="button"
                 onClick={() => {
-                  setTableAbsenTab('SUDAH_ABSEN_BELUM_TENKO');
+                  setTableAbsenTab('PENDING');
                   setTableAbsenPage(1);
                 }}
                 className={`text-xs font-bold pb-1 relative transition cursor-pointer ${
-                  tableAbsenTab === 'SUDAH_ABSEN_BELUM_TENKO'
+                  tableAbsenTab === 'PENDING'
                     ? 'text-amber-600 border-b-2 border-amber-600'
                     : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
-                Sudah Absen, Belum TENKO ({driversSudahAbsenBelumTenko.length})
+                Belum TENKO ({countBelumTenko})
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setTableAbsenTab('DONE');
+                  setTableAbsenPage(1);
+                }}
+                className={`text-xs font-bold pb-1 relative transition cursor-pointer ${
+                  tableAbsenTab === 'DONE'
+                    ? 'text-emerald-600 border-b-2 border-emerald-600'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Sudah TENKO ({countSudahTenko})
               </button>
             </div>
 
@@ -1141,11 +1181,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder={
-                  tableAbsenTab === 'BELUM_ABSEN'
-                    ? 'Cari nama driver, NIK yang belum absen...'
-                    : 'Cari driver sudah absen yang belum periksa tenko...'
-                }
+                placeholder="Cari nama driver, NIK yang absen hari ini..."
                 value={tableAbsenSearch}
                 onChange={(e) => {
                   setTableAbsenSearch(e.target.value);
@@ -1162,128 +1198,51 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
                   <th className="py-2.5 px-3">No</th>
-                  <th className="py-2.5 px-3">NIK &amp; Nama Personil</th>
+                  <th className="py-2.5 px-3">Waktu &amp; Lokasi Absen</th>
+                  <th className="py-2.5 px-3">NIK &amp; Nama Driver</th>
                   <th className="py-2.5 px-3">Posisi &amp; Grup</th>
-                  <th className="py-2.5 px-3">Status Hari Ini</th>
+                  <th className="py-2.5 px-3">Status TENKO</th>
                   <th className="py-2.5 px-3 text-center">Tindakan / Kontak</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
                 {filteredTableAbsen.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400">
-                      <UserCheck className="w-8 h-8 mx-auto text-emerald-400 mb-2" />
+                    <td colSpan={6} className="py-12 text-center text-slate-400">
+                      <UserCheck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
                       <p className="font-semibold text-slate-700 text-xs">
-                        {tableAbsenTab === 'BELUM_ABSEN'
-                          ? 'Semua driver telah melakukan absensi masuk!'
-                          : 'Tidak ada driver tertunda pemeriksaan TENKO'}
+                        {attendedDriversList.length === 0
+                          ? `Belum ada log absensi masuk yang tercatat pada tanggal ${tableAbsenDate}`
+                          : 'Tidak ada driver yang cocok dengan filter / pencarian'}
                       </p>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        Kepatuhan operasional berjalan optimal di hub ini.
+                        {attendedDriversList.length === 0
+                          ? 'Log absensi harian akan otomatis muncul begitu driver melakukan clock-in di pos atau sistem ERP.'
+                          : 'Coba ubah kata kunci pencarian atau tab status.'}
                       </p>
                     </td>
                   </tr>
-                ) : tableAbsenTab === 'BELUM_ABSEN' ? (
-                  // LIST 1: BELUM ABSEN HARI INI
-                  (paginatedTableAbsen as Array<{ driver: Driver; statusText: string }>).map((item, idx) => {
-                    const rowNumber = (tableAbsenPage - 1) * tableAbsenPerPage + idx + 1;
-                    const drv = item.driver;
-
-                    return (
-                      <tr key={drv.driverDocumentId || drv.driverId} className="hover:bg-slate-50/70 transition">
-                        <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
-                          {rowNumber}
-                        </td>
-
-                        {/* NIK & Full Name */}
-                        <td className="py-2.5 px-3">
-                          <span className="font-semibold text-slate-900 block truncate max-w-[150px]">
-                            {drv.fullName}
-                          </span>
-                          <span className="font-mono text-[10.5px] text-slate-500 block mt-0.5">
-                            {drv.driverId}
-                          </span>
-                        </td>
-
-                        {/* Position & Group */}
-                        <td className="py-2.5 px-3">
-                          <span
-                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
-                              drv.position === 'KENEK'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
-                            }`}
-                          >
-                            {drv.position || 'DRIVER'}
-                          </span>
-                          <span className="text-[10.5px] text-slate-500 block mt-0.5">
-                            {drv.driverGroupId || '-'}
-                          </span>
-                        </td>
-
-                        {/* Status */}
-                        <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                            <Clock className="w-2.5 h-2.5" />
-                            Belum Absen
-                          </span>
-                        </td>
-
-                        {/* Actions: WA Reminder & Start Tenko */}
-                        <td className="py-2.5 px-3 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {drv.phoneNumber ? (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleSendWhatsAppReminder(
-                                    drv.phoneNumber,
-                                    drv.fullName,
-                                    'belum melakukan absensi masuk hari ini'
-                                  )
-                                }
-                                className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
-                                title={`Ingatkan via WhatsApp (${drv.phoneNumber})`}
-                              >
-                                <MessageCircle className="w-3.5 h-3.5" />
-                              </button>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 italic">No WA -</span>
-                            )}
-
-                            {onStartExaminationWithDriver && (
-                              <button
-                                type="button"
-                                onClick={() => onStartExaminationWithDriver(drv.driverId)}
-                                className="px-2 py-1 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-lg text-[10.5px] font-semibold transition cursor-pointer"
-                                title="Mulai Pemeriksaan TENKO langsung"
-                              >
-                                Mulai Tenko
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })
                 ) : (
-                  // LIST 2: SUDAH ABSEN, BELUM TENKO
-                  (paginatedTableAbsen as Array<{
-                    driver?: Driver;
-                    userCode: string;
-                    driverName: string;
-                    logTime: string;
-                    siteName: string;
-                    phoneNumber?: string;
-                    position: string;
-                    driverGroup?: string;
-                  }>).map((item, idx) => {
+                  paginatedTableAbsen.map((item, idx) => {
                     const rowNumber = (tableAbsenPage - 1) * tableAbsenPerPage + idx + 1;
+                    const rec = (item.tenkoRecommendation || '').toUpperCase();
 
                     return (
-                      <tr key={item.userCode + idx} className="hover:bg-slate-50/70 transition">
+                      <tr key={item.userCode + (item.logDocumentId || idx)} className="hover:bg-slate-50/70 transition">
                         <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
                           {rowNumber}
+                        </td>
+
+                        {/* Waktu & Lokasi Absen */}
+                        <td className="py-2.5 px-3">
+                          <span className="font-mono font-semibold text-slate-800 flex items-center gap-1">
+                            <Clock className="w-3 h-3 text-blue-600" />
+                            {item.logTime}
+                          </span>
+                          <span className="text-[10.5px] text-slate-500 flex items-center gap-1 mt-0.5 truncate max-w-[130px]">
+                            <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                            {item.siteName}
+                          </span>
                         </td>
 
                         {/* NIK & Full Name */}
@@ -1298,54 +1257,94 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
 
                         {/* Position & Group */}
                         <td className="py-2.5 px-3">
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-slate-100 text-slate-700">
+                          <span
+                            className={`inline-block px-1.5 py-0.5 rounded text-[9.5px] font-bold ${
+                              item.position === 'KENEK'
+                                ? 'bg-amber-100 text-amber-800'
+                                : 'bg-blue-100 text-blue-800'
+                            }`}
+                          >
                             {item.position}
                           </span>
-                          <span className="text-[10.5px] text-slate-500 block mt-0.5">
+                          <span className="text-[10.5px] text-slate-500 block mt-0.5 truncate max-w-[120px]">
                             {item.driverGroup || '-'}
                           </span>
                         </td>
 
-                        {/* Status: Clock In Time */}
+                        {/* Status TENKO */}
                         <td className="py-2.5 px-3">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                            <AlertCircle className="w-2.5 h-2.5" />
-                            Menunggu Tenko
-                          </span>
-                          <span className="text-[10px] text-slate-400 block mt-0.5">
-                            Absen: {item.logTime}
-                          </span>
+                          {item.hasTenko ? (
+                            <div>
+                              {rec.includes('WITH NOTE') ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <AlertTriangle className="w-2.5 h-2.5" />
+                                  Fit w/ Note
+                                </span>
+                              ) : rec.includes('UNFIT') ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <XCircle className="w-2.5 h-2.5" />
+                                  Unfit
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-2.5 h-2.5" />
+                                  Fit to Work
+                                </span>
+                              )}
+                              <span className="text-[9.5px] text-slate-400 block mt-0.5">
+                                Selesai: {item.tenkoTime ? item.tenkoTime.slice(11, 16) : '-'}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                              <AlertCircle className="w-2.5 h-2.5" />
+                              Menunggu TENKO
+                            </span>
+                          )}
                         </td>
 
                         {/* Actions */}
                         <td className="py-2.5 px-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            {item.phoneNumber && (
+                            {item.hasTenko ? (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  handleSendWhatsAppReminder(
-                                    item.phoneNumber,
-                                    item.driverName,
-                                    'sudah absen masuk tetapi belum menjalani pemeriksaan TENKO'
-                                  )
-                                }
-                                className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
-                                title="Ingatkan ke Pos TENKO via WA"
+                                onClick={() => item.tenkoExam && onSelectExamination && onSelectExamination(item.tenkoExam)}
+                                className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition cursor-pointer"
+                                title="Lihat Hasil TENKO"
                               >
-                                <MessageCircle className="w-3.5 h-3.5" />
+                                <Eye className="w-4 h-4" />
                               </button>
-                            )}
+                            ) : (
+                              <>
+                                {item.phoneNumber && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      handleSendWhatsAppReminder(
+                                        item.phoneNumber,
+                                        item.driverName,
+                                        'sudah absen masuk tetapi belum menjalani pemeriksaan TENKO'
+                                      )
+                                    }
+                                    className="p-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg transition cursor-pointer"
+                                    title={`Ingatkan via WhatsApp (${item.phoneNumber})`}
+                                  >
+                                    <MessageCircle className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
 
-                            {onStartExaminationWithDriver && (
-                              <button
-                                type="button"
-                                onClick={() => onStartExaminationWithDriver(item.userCode)}
-                                className="px-2 py-1 bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg text-[10.5px] font-semibold transition cursor-pointer"
-                                title="Periksa Tenko Sekarang"
-                              >
-                                Periksa
-                              </button>
+                                {onStartExaminationWithDriver && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onStartExaminationWithDriver(item.userCode)}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-[10.5px] font-semibold transition cursor-pointer shadow-xs"
+                                    title="Mulai Pemeriksaan TENKO Sekarang"
+                                  >
+                                    Mulai Tenko
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
                         </td>
@@ -1360,13 +1359,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
           {/* Table Footer & Pagination */}
           <div className="p-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 bg-slate-50/50">
             <span>
-              Total:{' '}
-              <strong>
-                {tableAbsenTab === 'BELUM_ABSEN'
-                  ? driversBelumAbsenHariIni.length
-                  : driversSudahAbsenBelumTenko.length}
-              </strong>{' '}
-              personil
+              Total: <strong>{countTotalAttended}</strong> driver absen hari ini ({countSudahTenko} Selesai, {countBelumTenko} Menunggu TENKO)
             </span>
             <div className="flex items-center gap-1.5">
               <button
