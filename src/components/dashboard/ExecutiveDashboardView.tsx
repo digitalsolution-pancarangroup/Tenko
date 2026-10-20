@@ -361,7 +361,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         siteName: log.siteName || '-',
         fingerFlag: log.fingerFlag,
         position: master?.position || 'DRIVER',
-        driverGroup: master?.driverGroupId || tenko?.driverGroupSnapshot || '-',
+        driverGroup: (log.driverGroup && log.driverGroup.trim()) || master?.driverGroupId || tenko?.driverGroupSnapshot || 'REGULER',
         phoneNumber: master?.phoneNumber,
         hasTenko: !!tenko,
         tenkoExam: tenko,

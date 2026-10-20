@@ -64,34 +64,48 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
   const handleDownloadTemplate = () => {
     const templateData = [
       {
-        'User Code': '201240370',
-        'Driver Name': '201240370 - ANDRI SANTOSO',
+        'User Code': '219250105',
+        'Driver Name': 'SINGGIH PAMUNGKAS',
+        'Finger Flag': 1,
+        'Group Armada': 'CDP - KONTRAK PT. CDP',
+        'Log Time': '2026-03-11 18:20:48',
+        'Site Name': 'HAULAGE CDP1',
         'Data Source': 'APP',
         'Driver': 'Y',
-        'Finger Flag': 1,
-        'Log Time': '03/03/2026 00:03',
         'Process to Attendance': 'N',
+      },
+      {
+        'User Code': '201240370',
+        'Driver Name': 'ANDRI SANTOSO',
+        'Finger Flag': 1,
+        'Group Armada': 'Gudang AQUA Pandaan (TIV)',
+        'Log Time': '2026-03-11 00:03:00',
         'Site Name': 'Gudang AQUA Pandaan (TIV)',
+        'Data Source': 'APP',
+        'Driver': 'Y',
+        'Process to Attendance': 'N',
       },
       {
         'User Code': '219130535',
-        'Driver Name': '219130535 - SUHERMAN BIN SARTANAJAYA',
+        'Driver Name': 'SUHERMAN BIN SARTANAJAYA',
+        'Finger Flag': 1,
+        'Group Armada': 'GENESIS MAERSK CIKARANG',
+        'Log Time': '2026-03-11 00:00:00',
+        'Site Name': 'GENESIS MAERSK CIKARANG',
         'Data Source': 'APP',
         'Driver': 'Y',
-        'Finger Flag': 1,
-        'Log Time': '03/03/2026 00:00',
         'Process to Attendance': 'N',
-        'Site Name': 'GENESIS MAERSK CIKARANG',
       },
       {
         'User Code': '219100245',
-        'Driver Name': '219100245 - SAID BIN SAPIN',
+        'Driver Name': 'SAID BIN SAPIN',
+        'Finger Flag': 0,
+        'Group Armada': 'GARASI MDL',
+        'Log Time': '2026-03-11 08:30:00',
+        'Site Name': 'GARASI MDL',
         'Data Source': 'APP',
         'Driver': 'Y',
-        'Finger Flag': 0,
-        'Log Time': '03/03/2026 00:00',
         'Process to Attendance': 'N',
-        'Site Name': 'GARASI MDL',
       },
     ];
 
@@ -150,7 +164,7 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
       // 1. Smart Header Row Detection (look across first 20 rows for header keywords)
       const headerKeywords = [
         'user', 'code', 'nik', 'driver', 'nama', 'name', 'flag', 'finger',
-        'time', 'waktu', 'jam', 'site', 'lokasi', 'pool', 'source', 'date', 'tanggal'
+        'group', 'grup', 'armada', 'time', 'waktu', 'jam', 'site', 'lokasi', 'pool', 'source', 'date', 'tanggal'
       ];
 
       let headerRowIdx = 0;
@@ -197,18 +211,23 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
 
       // Column Indexes
       const userCodeIdx = findColIdx([
-        'usercode', 'user_code', 'user code', 'nik', 'driverid', 'id driver', 'driver id',
+        'usercode', 'user_code', 'user code', 'user code (id driver)', 'nik', 'driverid', 'id driver', 'driver id',
         'kodedriver', 'kodesupir', 'karyawanid', 'pin', 'badge', 'nrp', 'id', 'user'
       ]);
 
       const driverNameIdx = findColIdx([
-        'drivername', 'driver_name', 'driver name', 'namadriver', 'namalengkap', 'namasupir',
-        'nama', 'name', 'employeename', 'nama karyawan'
+        'drivername', 'driver_name', 'driver name', 'namadriverkenek', 'nama driver / kenek', 'nama driver/kenek',
+        'namadriver', 'namalengkap', 'namasupir', 'nama', 'name', 'employeename', 'nama karyawan'
       ]);
 
       const fingerFlagIdx = findColIdx([
-        'fingerflag', 'finger_flag', 'finger flag', 'flag', 'tipeflag', 'statusfinger',
+        'fingerflag', 'finger_flag', 'finger flag', 'tipeabsensi', 'tipe absensi', 'flag', 'tipeflag', 'statusfinger',
         'inout', 'arah', 'tipe', 'masukkeluar', 'type', 'event'
+      ]);
+
+      const groupArmadaIdx = findColIdx([
+        'grouparmada', 'group_armada', 'group armada', 'group', 'grup', 'armada',
+        'drivergroup', 'driver_group', 'driver group', 'kelompok', 'divisi', 'gruparmada'
       ]);
 
       const logTimeIdx = findColIdx([
@@ -217,7 +236,7 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
       ]);
 
       const siteNameIdx = findColIdx([
-        'sitename', 'site_name', 'site name', 'site', 'lokasi', 'pool', 'garasi', 'branch',
+        'sitename', 'site_name', 'site name', 'sitepool', 'site/pool', 'site / pool', 'site', 'lokasi', 'pool', 'garasi', 'branch',
         'cabang', 'unit', 'location', 'gudang', 'depot'
       ]);
 
@@ -246,6 +265,7 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
         let rawUserCode = String(getRaw(userCodeIdx)).trim();
         let rawDriverName = String(getRaw(driverNameIdx)).trim();
         const rawFlag = getRaw(fingerFlagIdx);
+        let rawGroup = String(getRaw(groupArmadaIdx)).trim();
         const rawLogTime = getRaw(logTimeIdx);
         const rawSite = String(getRaw(siteNameIdx)).trim();
         const rawSource = String(getRaw(dataSourceIdx)).trim();
@@ -305,6 +325,7 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
             logDate,
             processToAttendance: rawProcess || 'N',
             siteName: rawSite || 'GARASI MDL',
+            driverGroup: rawGroup || '',
           });
         }
       }
@@ -387,12 +408,13 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
             <div className="flex items-start gap-3 text-xs leading-relaxed">
               <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <span className="font-bold">Format Kolom ERP:</span> Sistem otomatis membaca kolom{' '}
+                <span className="font-bold">Format Kolom Terhubung:</span> Sistem otomatis menyelaraskan kolom{' '}
                 <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">User Code</code>,{' '}
                 <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Driver Name</code>,{' '}
-                <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Finger Flag (1=Masuk)</code>,{' '}
+                <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Finger Flag / Tipe Absensi</code>,{' '}
+                <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Group Armada</code>,{' '}
                 <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Log Time</code>, dan{' '}
-                <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Site Name</code>.
+                <code className="bg-blue-100 px-1 py-0.5 rounded font-mono text-[11px]">Site Name / Pool</code>.
               </div>
             </div>
             <button
@@ -497,40 +519,52 @@ export const ImportAttendanceModal: React.FC<ImportAttendanceModalProps> = ({
               {/* Data Table Preview (First 50 rows) */}
               <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
                 <div className="px-4 py-2.5 bg-slate-100/90 border-b border-slate-200 flex items-center justify-between text-xs text-slate-600 font-bold">
-                  <span>Pratinjau Data ({previewRows.length} Baris)</span>
+                  <span>Pratinjau Data Sesuai Kolom Tabel ({previewRows.length} Baris)</span>
                   <span className="text-[11px] font-normal text-slate-500">Menampilkan 50 baris pertama</span>
                 </div>
                 <div className="max-h-60 overflow-y-auto">
                   <table className="w-full text-left text-xs text-slate-700">
                     <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500 sticky top-0 border-b border-slate-200">
                       <tr>
-                        <th className="px-3 py-2">No</th>
-                        <th className="px-3 py-2">User Code</th>
-                        <th className="px-3 py-2">Driver Name</th>
-                        <th className="px-3 py-2">Finger Flag</th>
+                        <th className="px-3 py-2 text-center w-10">No</th>
+                        <th className="px-3 py-2">User Code (ID Driver)</th>
+                        <th className="px-3 py-2">Nama Driver / Kenek</th>
+                        <th className="px-3 py-2 text-center">Tipe Absensi</th>
+                        <th className="px-3 py-2">Group Armada</th>
                         <th className="px-3 py-2">Log Time</th>
-                        <th className="px-3 py-2">Site Name</th>
+                        <th className="px-3 py-2">Site / Pool</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {previewRows.slice(0, 50).map((row, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/80">
-                          <td className="px-3 py-2 text-slate-400">{idx + 1}</td>
-                          <td className="px-3 py-2 font-mono font-bold text-slate-900">{row.userCode}</td>
-                          <td className="px-3 py-2 font-medium text-slate-800">{row.driverName}</td>
+                          <td className="px-3 py-2 text-center text-slate-400 font-medium">{idx + 1}</td>
                           <td className="px-3 py-2">
+                            <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200/60 text-[11px]">
+                              {row.userCode}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-bold text-slate-900">{row.driverName}</td>
+                          <td className="px-3 py-2 text-center">
                             {row.fingerFlag === 1 ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                                 1 (MASUK)
                               </span>
                             ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-200 text-slate-700">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-700 border border-slate-200">
+                                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                                 0 (KELUAR)
                               </span>
                             )}
                           </td>
-                          <td className="px-3 py-2 font-mono text-slate-600 text-[11px]">{row.logTime}</td>
-                          <td className="px-3 py-2 text-slate-600">{row.siteName}</td>
+                          <td className="px-3 py-2">
+                            <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                              {row.driverGroup || 'REGULER'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-slate-700 text-[11px] font-medium">{row.logTime}</td>
+                          <td className="px-3 py-2 text-slate-700 font-medium">{row.siteName}</td>
                         </tr>
                       ))}
                     </tbody>

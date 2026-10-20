@@ -161,6 +161,7 @@ export async function importAttendanceLogsBatch(
       logDate,
       processToAttendance: String(item.processToAttendance || 'N').trim(),
       siteName: String(item.siteName || '-').trim(),
+      driverGroup: String(item.driverGroup || '').trim(),
       importBatchId: batchId,
       importedAt: now,
       importedBy: userName,
@@ -344,7 +345,7 @@ export function computeAttendanceTenkoComparison(
       tenkoRecommendation: tenkoRecord?.recommendation,
       tenkoTime: tenkoRecord?.finishTime || tenkoRecord?.createdAt,
       phoneNumber: master?.phoneNumber,
-      driverGroup: master?.driverGroupId || tenkoRecord?.driverGroupSnapshot,
+      driverGroup: (log.driverGroup && log.driverGroup.trim()) || master?.driverGroupId || tenkoRecord?.driverGroupSnapshot || 'REGULER',
     });
   }
 

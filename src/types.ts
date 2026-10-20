@@ -320,13 +320,14 @@ export interface AttendanceLogItem {
   logDocumentId?: string;
   userCode: string; // ID Driver, e.g. "201240370"
   driverName: string; // e.g. "ANDRI SANTOSO"
-  dataSource: string; // e.g. "APP"
-  isDriver: string; // e.g. "Y"
+  dataSource?: string; // e.g. "APP"
+  isDriver?: string; // e.g. "Y"
   fingerFlag: number; // 1 = Masuk (IN), 0 = Keluar (OUT)
   logTime: string; // e.g. "03/03/2026 00:03" or ISO
   logDate: string; // e.g. "2026-03-03" (YYYY-MM-DD)
-  processToAttendance: string; // e.g. "N"
+  processToAttendance?: string; // e.g. "N"
   siteName: string; // e.g. "Gudang AQUA Pandaan (TIV)"
+  driverGroup?: string; // e.g. "CDP - KONTRAK PT. CDP"
   importBatchId?: string;
   importedAt?: string;
   importedBy?: string;
