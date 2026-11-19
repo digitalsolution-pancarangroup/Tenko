@@ -15,6 +15,9 @@ import { DriverPosition, ExaminationRecommendation, ExaminationSummary, NonWorki
 import { logAuditAction } from './auditService';
 import { getDrivers, getDriverByCustomId, updateDriver } from './driverService';
 import { generateTenkoExaminationId, generateDriverDocId } from '../utils/idGenerators';
+import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
+
+const TENKO_CACHE_TTL_MS = 90_000; // 90 seconds
 
 export interface TenkoImportRow {
   examinationDate: string; // YYYY-MM-DD
@@ -66,17 +69,24 @@ export async function generateNextTenkoId(): Promise<{ tenkoId: string; sequence
   const mm = String(now.getMonth() + 1).padStart(2, '0');
   const dd = String(now.getDate()).padStart(2, '0');
   const datePrefix = `${yyyy}${mm}${dd}`;
+  const todayIso = `${yyyy}-${mm}-${dd}`;
 
   try {
-    const allExams = await getTenkoExaminations();
-    const todayExams = allExams.filter((e) => e.tenkoId && e.tenkoId.startsWith(`TENKO-${datePrefix}`));
+    const q = query(
+      collection(db, 'tenkoExaminations'),
+      where('examinationDate', '==', todayIso)
+    );
+    const snap = await getDocs(q);
+    const todayExams = snap.docs
+      .map((d) => d.data() as TenkoExamination)
+      .filter((e) => e.tenkoId && e.tenkoId.startsWith(`TENKO-${datePrefix}`));
     const nextSeq = todayExams.length + 1;
     const formattedSeq = String(nextSeq).padStart(4, '0');
     return {
       tenkoId: `TENKO-${datePrefix}-${formattedSeq}`,
-      sequenceNumber: allExams.length + 1,
+      sequenceNumber: nextSeq,
     };
-  } catch (err) {
+  } catch (_err) {
     const fallbackSeq = Math.floor(1000 + Math.random() * 9000);
     return {
       tenkoId: `TENKO-${datePrefix}-${fallbackSeq}`,
@@ -85,125 +95,104 @@ export async function generateNextTenkoId(): Promise<{ tenkoId: string; sequence
   }
 }
 
-export async function getTenkoExaminations(locationFilter?: string): Promise<TenkoExamination[]> {
-  try {
-    const q = query(collection(db, 'tenkoExaminations'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const list = snap.docs.map((d) => ({
-      tenkoDocumentId: d.id,
-      ...d.data(),
-    }) as TenkoExamination);
+function mergeGateLogsIntoExams(list: TenkoExamination[], gateLogsSnap: any): TenkoExamination[] {
+  if (!gateLogsSnap || gateLogsSnap.empty) return list;
 
-    // Cross-merge gate logs to ensure 100% security confirmation presence even if older records had sync delay
-    try {
-      const gateLogsSnap = await getDocs(collection(db, 'securityGateLogs'));
-      if (!gateLogsSnap.empty) {
-        const logMap = new Map<string, any>();
-        gateLogsSnap.docs.forEach((gd) => {
-          const gData = gd.data();
-          if (gData.tenkoId) logMap.set(gData.tenkoId.toLowerCase(), gData);
-          if (gData.tenkoDocumentId) logMap.set(gData.tenkoDocumentId.toLowerCase(), gData);
-          if (gData.driverId && gData.checkedAt) {
-            const dateStr = gData.checkedAt.slice(0, 10);
-            logMap.set(`${gData.driverId.toLowerCase()}_${dateStr}`, gData);
-          }
-        });
-
-        list.forEach((exam) => {
-          const tid = exam.tenkoId?.toLowerCase();
-          const tdoc = exam.tenkoDocumentId?.toLowerCase();
-          const examDate = (exam.examinationDate || exam.createdAt || '').slice(0, 10);
-          const driverKey = exam.driverId ? `${exam.driverId.toLowerCase()}_${examDate}` : '';
-
-          const matchedLog =
-            (tdoc && logMap.get(tdoc)) ||
-            (tid && logMap.get(tid)) ||
-            (driverKey && logMap.get(driverKey));
-
-          if (matchedLog && (!exam.securityGateStatus || !exam.securityOfficerName)) {
-            exam.isUsed = true;
-            exam.securityGateStatus = matchedLog.gateStatus;
-            exam.securityOfficerName = matchedLog.securityOfficerName;
-            exam.securityCheckedAt = matchedLog.checkedAt;
-            exam.vehiclePlateNumber = exam.vehiclePlateNumber || matchedLog.vehiclePlateNumber;
-          }
-        });
-      }
-    } catch {
-      // Ignore non-fatal log merge error
+  const logMap = new Map<string, any>();
+  gateLogsSnap.docs.forEach((gd: any) => {
+    const gData = gd.data();
+    if (gData.tenkoId) logMap.set(gData.tenkoId.toLowerCase(), gData);
+    if (gData.tenkoDocumentId) logMap.set(gData.tenkoDocumentId.toLowerCase(), gData);
+    if (gData.driverId && gData.checkedAt) {
+      const dateStr = gData.checkedAt.slice(0, 10);
+      logMap.set(`${gData.driverId.toLowerCase()}_${dateStr}`, gData);
     }
+  });
 
-    if (locationFilter && locationFilter !== 'ALL') {
-      const filterNorm = locationFilter.trim().toLowerCase();
-      return list.filter(
-        (e) =>
-          (e.locationNameSnapshot && e.locationNameSnapshot.trim().toLowerCase() === filterNorm) ||
-          (e.locationId && e.locationId.trim().toLowerCase() === filterNorm)
-      );
+  list.forEach((exam) => {
+    const tid = exam.tenkoId?.toLowerCase();
+    const tdoc = exam.tenkoDocumentId?.toLowerCase();
+    const examDate = (exam.examinationDate || exam.createdAt || '').slice(0, 10);
+    const driverKey = exam.driverId ? `${exam.driverId.toLowerCase()}_${examDate}` : '';
+
+    const matchedLog =
+      (tdoc && logMap.get(tdoc)) ||
+      (tid && logMap.get(tid)) ||
+      (driverKey && logMap.get(driverKey));
+
+    if (matchedLog && (!exam.securityGateStatus || !exam.securityOfficerName)) {
+      exam.isUsed = true;
+      exam.securityGateStatus = matchedLog.gateStatus;
+      exam.securityOfficerName = matchedLog.securityOfficerName;
+      exam.securityCheckedAt = matchedLog.checkedAt;
+      exam.vehiclePlateNumber = exam.vehiclePlateNumber || matchedLog.vehiclePlateNumber;
     }
-    return list;
-  } catch (error) {
-    try {
-      const snap = await getDocs(collection(db, 'tenkoExaminations'));
-      const list = snap.docs.map((d) => ({
-        ...d.data(),
-        tenkoDocumentId: d.id,
-      }) as TenkoExamination);
-      const sorted = list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  });
 
-      // Cross-merge gate logs for fallback as well
+  return list;
+}
+
+export async function getTenkoExaminations(
+  locationFilter?: string,
+  forceRefresh: boolean = false
+): Promise<TenkoExamination[]> {
+  let fetchedFromServer = false;
+
+  const allList = await getOrFetch(
+    'tenko:all',
+    async () => {
       try {
-        const gateLogsSnap = await getDocs(collection(db, 'securityGateLogs'));
-        if (!gateLogsSnap.empty) {
-          const logMap = new Map<string, any>();
-          gateLogsSnap.docs.forEach((gd) => {
-            const gData = gd.data();
-            if (gData.tenkoId) logMap.set(gData.tenkoId.toLowerCase(), gData);
-            if (gData.tenkoDocumentId) logMap.set(gData.tenkoDocumentId.toLowerCase(), gData);
-            if (gData.driverId && gData.checkedAt) {
-              const dateStr = gData.checkedAt.slice(0, 10);
-              logMap.set(`${gData.driverId.toLowerCase()}_${dateStr}`, gData);
-            }
-          });
+        const q = query(collection(db, 'tenkoExaminations'), orderBy('createdAt', 'desc'));
+        const [snap, gateLogsSnap] = await Promise.all([
+          getDocs(q),
+          getDocs(collection(db, 'securityGateLogs')).catch(() => null),
+        ]);
+        fetchedFromServer = true;
 
-          sorted.forEach((exam) => {
-            const tid = exam.tenkoId?.toLowerCase();
-            const tdoc = exam.tenkoDocumentId?.toLowerCase();
-            const examDate = (exam.examinationDate || exam.createdAt || '').slice(0, 10);
-            const driverKey = exam.driverId ? `${exam.driverId.toLowerCase()}_${examDate}` : '';
+        const list = snap.docs.map((d) => ({
+          tenkoDocumentId: d.id,
+          ...d.data(),
+        }) as TenkoExamination);
 
-            const matchedLog =
-              (tdoc && logMap.get(tdoc)) ||
-              (tid && logMap.get(tid)) ||
-              (driverKey && logMap.get(driverKey));
+        return mergeGateLogsIntoExams(list, gateLogsSnap);
+      } catch (_error) {
+        try {
+          const [snap, gateLogsSnap] = await Promise.all([
+            getDocs(collection(db, 'tenkoExaminations')),
+            getDocs(collection(db, 'securityGateLogs')).catch(() => null),
+          ]);
+          fetchedFromServer = true;
 
-            if (matchedLog && (!exam.securityGateStatus || !exam.securityOfficerName)) {
-              exam.isUsed = true;
-              exam.securityGateStatus = matchedLog.gateStatus;
-              exam.securityOfficerName = matchedLog.securityOfficerName;
-              exam.securityCheckedAt = matchedLog.checkedAt;
-              exam.vehiclePlateNumber = exam.vehiclePlateNumber || matchedLog.vehiclePlateNumber;
-            }
-          });
+          const list = snap.docs.map((d) => ({
+            ...d.data(),
+            tenkoDocumentId: d.id,
+          }) as TenkoExamination);
+
+          const sorted = list.sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+
+          return mergeGateLogsIntoExams(sorted, gateLogsSnap);
+        } catch (fallbackErr) {
+          console.warn('Fallback to empty tenko examination list (Firestore quota/offline):', fallbackErr);
+          return [];
         }
-      } catch {
-        // Ignore
       }
+    },
+    TENKO_CACHE_TTL_MS,
+    forceRefresh,
+    () => fetchedFromServer
+  );
 
-      if (locationFilter && locationFilter !== 'ALL') {
-        const filterNorm = locationFilter.trim().toLowerCase();
-        return sorted.filter(
-          (e) =>
-            (e.locationNameSnapshot && e.locationNameSnapshot.trim().toLowerCase() === filterNorm) ||
-            (e.locationId && e.locationId.trim().toLowerCase() === filterNorm)
-        );
-      }
-      return sorted;
-    } catch (fallbackErr) {
-      console.warn('Fallback to empty tenko examination list (Firestore quota/offline):', fallbackErr);
-      return [];
-    }
+  if (locationFilter && locationFilter !== 'ALL') {
+    const filterNorm = locationFilter.trim().toLowerCase();
+    return allList.filter(
+      (e) =>
+        (e.locationNameSnapshot && e.locationNameSnapshot.trim().toLowerCase() === filterNorm) ||
+        (e.locationId && e.locationId.trim().toLowerCase() === filterNorm)
+    );
   }
+  return allList;
 }
 
 export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamination | null> {
@@ -235,12 +224,24 @@ export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamina
       } as TenkoExamination;
     }
 
-    // 3. Fallback: Search all examinations sorted newest first (createdAt desc)
-    const allSnap = await getDocs(collection(db, 'tenkoExaminations'));
-    const allDocs = allSnap.docs.map((d) => ({
-      ...d.data(),
-      tenkoDocumentId: d.id,
-    } as TenkoExamination));
+    // 2b. Query by driverId directly (avoids full collection scan when scanning driver NIK)
+    const driverQ = query(collection(db, 'tenkoExaminations'), where('driverId', '==', cleanTarget.toUpperCase()));
+    const driverSnap = await getDocs(driverQ);
+    if (!driverSnap.empty) {
+      const driverDocs = driverSnap.docs.map((d) => ({
+        ...d.data(),
+        tenkoDocumentId: d.id,
+      }) as TenkoExamination);
+      driverDocs.sort((a, b) => {
+        const timeA = new Date(a.createdAt || a.examinationDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.examinationDate || 0).getTime();
+        return timeB - timeA;
+      });
+      return driverDocs[0];
+    }
+
+    // 3. Fallback: Search cached examinations sorted newest first (createdAt desc)
+    const allDocs = [...(await getTenkoExaminations())];
 
     // Sort descending so if a driverId is entered, we get the LATEST examination!
     allDocs.sort((a, b) => {
@@ -360,6 +361,10 @@ export async function updateTenkoSecurityStatus(
     }
   }
 
+  if (updated) {
+    invalidateCachePrefix('tenko:');
+  }
+
   return updated;
 }
 
@@ -390,6 +395,7 @@ export async function createTenkoExamination(
   };
 
   await setDoc(doc(db, 'tenkoExaminations', docId), newExamination);
+  invalidateCachePrefix('tenko:');
 
   // Auto-sync / enrich phone number to Master Driver if provided and driver has no phone or changed
   if (newExamination.driverPhoneSnapshot && newExamination.driverPhoneSnapshot.trim() !== '') {
@@ -582,6 +588,11 @@ export async function importTenkoBatch(
       await batch.commit();
     }
 
+    invalidateCachePrefix('tenko:');
+    if (result.autoCreatedDriversCount > 0) {
+      invalidateCachePrefix('drivers:');
+    }
+
     await logAuditAction({
       module: 'Data TENKO',
       recordId: `BATCH-IMPORT-${Date.now()}`,
@@ -620,6 +631,8 @@ export async function deleteAllTenkoExaminations(currentUser?: { userId: string;
       });
       await batch.commit();
     }
+
+    invalidateCachePrefix('tenko:');
 
     if (currentUser) {
       await logAuditAction({

@@ -2,15 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   TenkoExamination,
   Driver,
-  Nakes,
-  DriverGroup,
-  Location,
   AttendanceLogItem,
 } from '../../types';
 import { getTenkoExaminations } from '../../services/tenkoService';
 import { getDrivers } from '../../services/driverService';
-import { getNakesList, getDriverGroups, getLocations } from '../../services/masterService';
-import { getAttendanceLogs } from '../../services/attendanceService';
+import {
+  getAttendanceLogs,
+  getAttendanceLogsByDateRange,
+  getRecentAttendanceDates,
+} from '../../services/attendanceService';
 import { useAuth } from '../../context/AuthContext';
 import { NavigationPage } from '../layout/Sidebar';
 import * as XLSX from 'xlsx';
@@ -62,10 +62,8 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   // Master & Transaction Data States
   const [examinations, setExaminations] = useState<TenkoExamination[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [nakesList, setNakesList] = useState<Nakes[]>([]);
-  const [driverGroups, setDriverGroups] = useState<DriverGroup[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLogItem[]>([]);
+  const [recentAttendanceDates, setRecentAttendanceDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -115,21 +113,33 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     else setIsRefreshing(true);
 
     try {
-      const [allExams, allDrivers, allNakes, allGroups, allLocs, allLogs] = await Promise.all([
-        getTenkoExaminations(),
-        getDrivers(),
-        getNakesList(),
-        getDriverGroups(),
-        getLocations(),
-        getAttendanceLogs(),
+      const thirtyOneDaysAgo = new Date();
+      thirtyOneDaysAgo.setDate(thirtyOneDaysAgo.getDate() - 31);
+      const startRangeDate = thirtyOneDaysAgo.toISOString().split('T')[0];
+
+      const [allExams, allDrivers, recentLogs, recentDates] = await Promise.all([
+        getTenkoExaminations(undefined, silent),
+        getDrivers(silent),
+        getAttendanceLogsByDateRange(startRangeDate, undefined, silent),
+        getRecentAttendanceDates(10, silent),
       ]);
 
       setExaminations(allExams);
       setDrivers(allDrivers);
-      setNakesList(allNakes);
-      setDriverGroups(allGroups);
-      setLocations(allLocs);
-      setAttendanceLogs(allLogs);
+      setAttendanceLogs(recentLogs);
+      setRecentAttendanceDates(recentDates);
+
+      // Ensure logs for currently selected Table 4 date are available if it's older than 31 days
+      if (tableAbsenDate && tableAbsenDate < startRangeDate) {
+        const selectedDateLogs = await getAttendanceLogs(tableAbsenDate, silent);
+        if (selectedDateLogs.length > 0) {
+          setAttendanceLogs((prev) => {
+            const existingIds = new Set(prev.map((p) => p.logDocumentId));
+            const extra = selectedDateLogs.filter((l) => !existingIds.has(l.logDocumentId));
+            return extra.length > 0 ? [...prev, ...extra] : prev;
+          });
+        }
+      }
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
@@ -138,15 +148,35 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     }
   };
 
+  const handleTableAbsenDateChange = async (newDate: string) => {
+    setTableAbsenDate(newDate);
+    setTableAbsenPage(1);
+    const hasDateInMemory = attendanceLogs.some((l) => l.logDate === newDate);
+    if (!hasDateInMemory && newDate) {
+      try {
+        const dateLogs = await getAttendanceLogs(newDate, false);
+        if (dateLogs.length > 0) {
+          setAttendanceLogs((prev) => {
+            const existingIds = new Set(prev.map((p) => p.logDocumentId));
+            const extra = dateLogs.filter((l) => !existingIds.has(l.logDocumentId));
+            return extra.length > 0 ? [...prev, ...extra] : prev;
+          });
+        }
+      } catch (err) {
+        console.warn('Failed to fetch logs for selected date:', err);
+      }
+    }
+  };
+
   // Available dates with attendance logs
   const availableAttendanceDates = useMemo(() => {
-    const dates = Array.from(new Set(attendanceLogs.map((l) => l.logDate))).filter(Boolean);
-    if (!dates.includes(todayStr)) {
-      dates.push(todayStr);
-    }
-    dates.sort().reverse();
-    return dates;
-  }, [attendanceLogs, todayStr]);
+    const dates = new Set<string>(recentAttendanceDates);
+    attendanceLogs.forEach((l) => {
+      if (l.logDate) dates.add(l.logDate);
+    });
+    dates.add(todayStr);
+    return Array.from(dates).filter(Boolean).sort().reverse();
+  }, [recentAttendanceDates, attendanceLogs, todayStr]);
 
   // =========================================================================
   // 1. DATA PERHITUNGAN CHART 1: BARCHART RESULT PER BULAN
@@ -1103,10 +1133,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
                 {availableAttendanceDates.length > 1 && (
                   <select
                     value={tableAbsenDate}
-                    onChange={(e) => {
-                      setTableAbsenDate(e.target.value);
-                      setTableAbsenPage(1);
-                    }}
+                    onChange={(e) => handleTableAbsenDateChange(e.target.value)}
                     aria-label="Pilih tanggal log absensi"
                     className="text-[11px] font-semibold bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-700 cursor-pointer"
                   >

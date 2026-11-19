@@ -8,11 +8,13 @@ import {
   query,
   where,
   orderBy,
+  limit,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { AttendanceLogItem, AttendanceComparisonItem, TenkoExamination, Driver } from '../types';
 import { logAuditAction } from './auditService';
 import { generateAttendanceDocId } from '../utils/idGenerators';
+import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
 /**
  * Format date string to YYYY-MM-DD
@@ -58,45 +60,136 @@ export function normalizeAttendanceDate(rawDateStr: string): string {
   return new Date().toISOString().split('T')[0];
 }
 
+const ATTENDANCE_CACHE_TTL_MS = 120_000; // 2 minutes
+
 /**
- * Fetch all attendance logs, optionally filtered by date (YYYY-MM-DD)
+ * Fetch attendance logs for a specific date (YYYY-MM-DD) or recent logs.
+ * Uses single-field logDate query (no compound orderBy) so Firestore never fails on missing composite indexes
+ * and never falls back to scanning the entire 84k+ collection.
  */
-export async function getAttendanceLogs(filterDate?: string): Promise<AttendanceLogItem[]> {
-  try {
-    let q;
-    if (filterDate) {
-      q = query(
-        collection(db, 'attendanceLogs'),
-        where('logDate', '==', filterDate),
-        orderBy('logTime', 'asc')
-      );
-    } else {
-      q = query(collection(db, 'attendanceLogs'), orderBy('logDate', 'desc'), orderBy('logTime', 'desc'));
-    }
-
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({
-      ...(d.data() as Record<string, any>),
-      logDocumentId: d.id,
-    })) as AttendanceLogItem[];
-  } catch (error) {
-    try {
-      // Fallback query without compound order
-      const fallbackSnap = await getDocs(collection(db, 'attendanceLogs'));
-      const items = fallbackSnap.docs.map((d) => ({
-        ...(d.data() as Record<string, any>),
-        logDocumentId: d.id,
-      })) as AttendanceLogItem[];
-
-      if (filterDate) {
-        return items.filter((item) => item.logDate === filterDate);
-      }
-      return items;
-    } catch (e) {
-      console.warn('Fallback attendance fetch:', e);
-      return [];
-    }
+export async function getAttendanceLogs(
+  filterDate?: string,
+  forceRefresh: boolean = false
+): Promise<AttendanceLogItem[]> {
+  if (filterDate) {
+    return getOrFetch(
+      `attendance:date:${filterDate}`,
+      async () => {
+        try {
+          const q = query(
+            collection(db, 'attendanceLogs'),
+            where('logDate', '==', filterDate)
+          );
+          const snap = await getDocs(q);
+          const items = snap.docs.map((d) => ({
+            ...(d.data() as Record<string, any>),
+            logDocumentId: d.id,
+          })) as AttendanceLogItem[];
+          return items.sort((a, b) => (a.logTime || '').localeCompare(b.logTime || ''));
+        } catch (e) {
+          console.warn(`Attendance fetch for ${filterDate} failed:`, e);
+          return [];
+        }
+      },
+      ATTENDANCE_CACHE_TTL_MS,
+      forceRefresh
+    );
   }
+
+  // Fallback when called without date: fetch latest 30 days instead of scanning entire history
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+  return getAttendanceLogsByDateRange(startDate, undefined, forceRefresh);
+}
+
+/**
+ * Fetch attendance logs within a date range (YYYY-MM-DD) using single-field logDate index.
+ */
+export async function getAttendanceLogsByDateRange(
+  startDate: string,
+  endDate?: string,
+  forceRefresh: boolean = false
+): Promise<AttendanceLogItem[]> {
+  const cacheKey = `attendance:range:${startDate}_${endDate || 'OPEN'}`;
+  return getOrFetch(
+    cacheKey,
+    async () => {
+      try {
+        const constraints = [where('logDate', '>=', startDate)];
+        if (endDate) {
+          constraints.push(where('logDate', '<=', endDate));
+        }
+        const q = query(collection(db, 'attendanceLogs'), ...constraints);
+        const snap = await getDocs(q);
+        const items = snap.docs.map((d) => ({
+          ...(d.data() as Record<string, any>),
+          logDocumentId: d.id,
+        })) as AttendanceLogItem[];
+
+        return items.sort((a, b) => {
+          const dateCmp = (b.logDate || '').localeCompare(a.logDate || '');
+          if (dateCmp !== 0) return dateCmp;
+          return (b.logTime || '').localeCompare(a.logTime || '');
+        });
+      } catch (e) {
+        console.warn('Attendance date range fetch failed:', e);
+        return [];
+      }
+    },
+    ATTENDANCE_CACHE_TTL_MS,
+    forceRefresh
+  );
+}
+
+/**
+ * Discover up to N most recent distinct logDate values with minimal reads (1 doc read per distinct date)
+ * instead of downloading all 84k+ documents.
+ */
+export async function getRecentAttendanceDates(
+  maxDates: number = 6,
+  forceRefresh: boolean = false
+): Promise<string[]> {
+  return getOrFetch(
+    `attendance:recentDates:${maxDates}`,
+    async () => {
+      const dates: string[] = [];
+      let cursorDate: string | null = null;
+
+      try {
+        for (let i = 0; i < maxDates; i++) {
+          const q = cursorDate
+            ? query(
+                collection(db, 'attendanceLogs'),
+                where('logDate', '<', cursorDate),
+                orderBy('logDate', 'desc'),
+                limit(1)
+              )
+            : query(
+                collection(db, 'attendanceLogs'),
+                orderBy('logDate', 'desc'),
+                limit(1)
+              );
+
+          const snap = await getDocs(q);
+          if (snap.empty) break;
+
+          const data = snap.docs[0].data() as Record<string, any>;
+          const foundDate = String(data.logDate || '').trim();
+          if (!foundDate || dates.includes(foundDate)) break;
+
+          dates.push(foundDate);
+          cursorDate = foundDate;
+        }
+      } catch (e) {
+        console.warn('getRecentAttendanceDates failed:', e);
+      }
+
+      return dates;
+    },
+    ATTENDANCE_CACHE_TTL_MS,
+    forceRefresh
+  );
 }
 
 export interface AttendanceImportResult {
@@ -202,6 +295,8 @@ export async function importAttendanceLogsBatch(
     userName: userName,
   });
 
+  invalidateCachePrefix('attendance:');
+
   return {
     totalProcessed: items.length,
     successCount: uniqueItems.length,
@@ -241,6 +336,8 @@ export async function deleteAttendanceLogsByDate(
     userId: currentUser.email || 'SYSTEM',
     userName: currentUser.fullName || currentUser.email || 'Admin',
   });
+
+  invalidateCachePrefix('attendance:');
 
   return docs.length;
 }

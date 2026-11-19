@@ -9,6 +9,7 @@ import {
 } from '../../types';
 import {
   getAttendanceLogs,
+  getRecentAttendanceDates,
   deleteAttendanceLogsByDate,
   computeAttendanceTenkoComparison,
 } from '../../services/attendanceService';
@@ -60,7 +61,9 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
   const [examinations, setExaminations] = useState<TenkoExamination[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const [recentDates, setRecentDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingDateLogs, setLoadingDateLogs] = useState(false);
 
   // Filter States
   const todayStr = new Date().toISOString().split('T')[0];
@@ -80,32 +83,32 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
   const [itemsPerPage, setItemsPerPage] = useState(25);
 
   useEffect(() => {
-    loadAllData();
+    loadAllData(false);
   }, []);
 
-  const loadAllData = async () => {
+  const loadAllData = async (forceRefresh = true) => {
     setLoading(true);
     try {
-      const [logsData, examsData, driversData, locsData] = await Promise.all([
-        getAttendanceLogs(),
-        getTenkoExaminations(),
-        getDrivers(),
-        getLocations(),
+      const [recentDateList, examsData, driversData, locsData] = await Promise.all([
+        getRecentAttendanceDates(6, forceRefresh),
+        getTenkoExaminations(undefined, forceRefresh),
+        getDrivers(forceRefresh),
+        getLocations(forceRefresh),
       ]);
 
-      setAttendanceLogs(logsData);
+      setRecentDates(recentDateList);
       setExaminations(examsData);
       setDrivers(driversData);
       setLocations(locsData);
 
-      // If no logs for today, but logs exist, auto-select the latest date in logs
-      if (logsData.length > 0) {
-        const uniqueDates = Array.from(new Set(logsData.map((l) => l.logDate))).filter(Boolean);
-        uniqueDates.sort().reverse();
-        if (!uniqueDates.includes(todayStr) && uniqueDates.length > 0) {
-          setSelectedDate(uniqueDates[0]);
-        }
+      let targetDate = selectedDate || todayStr;
+      if (!forceRefresh && recentDateList.length > 0 && !recentDateList.includes(todayStr)) {
+        targetDate = recentDateList[0];
+        setSelectedDate(targetDate);
       }
+
+      const logsData = await getAttendanceLogs(targetDate, forceRefresh);
+      setAttendanceLogs(logsData);
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Gagal memuat data absensi.', 'error');
@@ -114,15 +117,28 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
     }
   };
 
-  // Compute available dates from attendance logs
-  const availableDates = useMemo(() => {
-    const dates = Array.from(new Set(attendanceLogs.map((l) => l.logDate))).filter(Boolean);
-    if (!dates.includes(todayStr)) {
-      dates.push(todayStr);
+  const handleDateChange = async (newDate: string) => {
+    setSelectedDate(newDate);
+    setCurrentPageNum(1);
+    if (!newDate) return;
+    setLoadingDateLogs(true);
+    try {
+      const logsData = await getAttendanceLogs(newDate, false);
+      setAttendanceLogs(logsData);
+    } catch (err: any) {
+      console.error(err);
+    } finally {
+      setLoadingDateLogs(false);
     }
-    dates.sort().reverse();
-    return dates;
-  }, [attendanceLogs, todayStr]);
+  };
+
+  // Compute available dates from recent dates + currently selected date
+  const availableDates = useMemo(() => {
+    const dates = new Set<string>(recentDates);
+    if (todayStr) dates.add(todayStr);
+    if (selectedDate) dates.add(selectedDate);
+    return Array.from(dates).filter(Boolean).sort().reverse();
+  }, [recentDates, todayStr, selectedDate]);
 
   // Compute available sites
   const availableSites = useMemo(() => {
@@ -198,7 +214,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
       });
       showToast(`Berhasil menghapus ${count} log absensi tanggal ${selectedDate}.`, 'success');
       setIsDeleteDateModalOpen(false);
-      await loadAllData();
+      await loadAllData(true);
     } catch (err: any) {
       console.error(err);
       showToast(err.message || 'Gagal menghapus log absensi.', 'error');
@@ -274,11 +290,11 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
         <div className="flex items-center gap-2.5 flex-wrap w-full sm:w-auto">
           <button
             type="button"
-            onClick={loadAllData}
-            disabled={loading}
+            onClick={() => loadAllData(true)}
+            disabled={loading || loadingDateLogs}
             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-2xl text-xs transition cursor-pointer"
           >
-            <RotateCcw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            <RotateCcw className={`w-3.5 h-3.5 ${loading || loadingDateLogs ? 'animate-spin' : ''}`} />
             <span>Muat Ulang</span>
           </button>
 
@@ -360,10 +376,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
               <input
                 type="date"
                 value={selectedDate}
-                onChange={(e) => {
-                  setSelectedDate(e.target.value);
-                  setCurrentPageNum(1);
-                }}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
               />
             </div>
@@ -460,11 +473,8 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
             <button
               key={d}
               type="button"
-              onClick={() => {
-                setSelectedDate(d);
-                setCurrentPageNum(1);
-              }}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition ${
+              onClick={() => handleDateChange(d)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
                 selectedDate === d
                   ? 'bg-blue-600 text-white font-bold'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
@@ -758,7 +768,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
       <ImportAttendanceModal
         isOpen={isImportModalOpen}
         onClose={() => setIsImportModalOpen(false)}
-        onSuccess={loadAllData}
+        onSuccess={() => loadAllData(true)}
       />
 
       {/* Delete Date Confirm Modal */}

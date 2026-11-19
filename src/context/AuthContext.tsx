@@ -12,6 +12,7 @@ import { auth, db } from '../firebase';
 import { User, UserRole } from '../types';
 import { seedDatabaseIfEmpty } from '../services/seedData';
 import { logAuditAction } from '../services/auditService';
+import { clearAllCaches } from '../utils/memoryCache';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -38,6 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      clearAllCaches();
       setFirebaseUser(user);
       if (user) {
         try {
@@ -385,6 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
+      clearAllCaches();
       localStorage.removeItem('tenko_auth_user');
       setCurrentUser(null);
       setFirebaseUser(null);

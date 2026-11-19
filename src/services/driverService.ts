@@ -15,27 +15,42 @@ import { Driver } from '../types';
 import { logAuditAction } from './auditService';
 import { INITIAL_DRIVERS } from './seedData';
 import { generateDriverDocId } from '../utils/idGenerators';
+import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
-export async function getDrivers(): Promise<Driver[]> {
-  try {
-    const q = query(collection(db, 'drivers'), orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      return snap.docs.map((d) => d.data() as Driver);
-    }
-    return INITIAL_DRIVERS;
-  } catch (error) {
-    try {
-      const snap = await getDocs(collection(db, 'drivers'));
-      if (!snap.empty) {
-        return snap.docs.map((d) => d.data() as Driver);
+const DRIVERS_CACHE_TTL_MS = 180_000; // 3 minutes
+
+export async function getDrivers(forceRefresh: boolean = false): Promise<Driver[]> {
+  let fetchedFromServer = false;
+  const result = await getOrFetch(
+    'drivers:all',
+    async () => {
+      try {
+        const q = query(collection(db, 'drivers'), orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q);
+        fetchedFromServer = true;
+        if (!snap.empty) {
+          return snap.docs.map((d) => d.data() as Driver);
+        }
+        return INITIAL_DRIVERS;
+      } catch (error) {
+        try {
+          const snap = await getDocs(collection(db, 'drivers'));
+          fetchedFromServer = true;
+          if (!snap.empty) {
+            return snap.docs.map((d) => d.data() as Driver);
+          }
+          return INITIAL_DRIVERS;
+        } catch (e) {
+          console.warn('Fallback to local drivers (Firestore quota/offline):', e);
+          return INITIAL_DRIVERS;
+        }
       }
-      return INITIAL_DRIVERS;
-    } catch (e) {
-      console.warn('Fallback to local drivers (Firestore quota/offline):', e);
-      return INITIAL_DRIVERS;
-    }
-  }
+    },
+    DRIVERS_CACHE_TTL_MS,
+    forceRefresh,
+    () => fetchedFromServer
+  );
+  return result;
 }
 
 export async function getDriverByCustomId(driverId: string): Promise<Driver | null> {
@@ -95,6 +110,7 @@ export async function createDriver(
   };
 
   await setDoc(doc(db, 'drivers', docId), newDriver);
+  invalidateCachePrefix('drivers:');
 
   await logAuditAction({
     module: 'Master Driver/Kenek',
@@ -131,6 +147,7 @@ export async function updateDriver(
   }
 
   await updateDoc(docRef, dataToUpdate);
+  invalidateCachePrefix('drivers:');
 
   await logAuditAction({
     module: 'Master Driver/Kenek',
@@ -160,9 +177,9 @@ export async function deleteDriver(
   const snap = await getDoc(docRef);
   const prevData = snap.exists() ? snap.data() : null;
 
-  // Import deleteDoc dynamically if needed or from firestore
   const { deleteDoc } = await import('firebase/firestore');
   await deleteDoc(docRef);
+  invalidateCachePrefix('drivers:');
 
   await logAuditAction({
     module: 'Master Driver/Kenek',
@@ -190,6 +207,8 @@ export async function deleteAllDrivers(
     chunk.forEach((d) => batch.delete(d.ref));
     await batch.commit();
   }
+
+  invalidateCachePrefix('drivers:');
 
   try {
     localStorage.removeItem('tenko_drivers');
@@ -380,6 +399,9 @@ export async function importDriversBatch(
       }
       await batch.commit();
     }
+
+    invalidateCachePrefix('drivers:');
+    invalidateCachePrefix('driverGroups:');
 
     // 4. Log overall audit
     await logAuditAction({

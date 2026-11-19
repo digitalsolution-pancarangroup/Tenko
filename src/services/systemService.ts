@@ -1,6 +1,7 @@
 import { collection, getDocs, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logAuditAction } from './auditService';
+import { clearAllCaches } from '../utils/memoryCache';
 
 export interface ClearDataOptions {
   clearTenkoExaminations?: boolean;
@@ -126,6 +127,8 @@ export async function clearAllSystemData(
     localStorage.setItem('tenko_sample_drivers_cleared', 'true');
     localStorage.setItem('tenko_seeded_done_tenko_db_v1', 'true');
   } catch {}
+
+  clearAllCaches();
 
   result.totalDeleted =
     result.tenkoExaminationsDeleted +

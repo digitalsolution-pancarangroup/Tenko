@@ -92,15 +92,20 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
   const [filterLocation, setFilterLocation] = useState<string>('ALL');
   const [filterSecurityStatus, setFilterSecurityStatus] = useState<string>('ALL');
 
+  const lastSyncAtRef = useRef<number>(0);
+
   useEffect(() => {
-    loadData(true);
+    loadData(true, false);
   }, []);
 
-  // Automatic real-time sync when tab is revisited or browser window is focused
+  // Gentle real-time sync on tab focus with 3-minute cooldown to prevent redundant reloads when switching tabs
   useEffect(() => {
     const handleSyncOnTabFocus = () => {
       if (document.visibilityState === 'visible') {
-        loadData(false);
+        const now = Date.now();
+        if (now - lastSyncAtRef.current > 180_000) {
+          loadData(false, true);
+        }
       }
     };
     window.addEventListener('focus', handleSyncOnTabFocus);
@@ -111,7 +116,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     };
   }, []);
 
-  const loadData = async (showFullLoading = true) => {
+  const loadData = async (showFullLoading = true, forceRefresh = false) => {
     if (showFullLoading) {
       setLoading(true);
     } else {
@@ -119,12 +124,13 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     }
     try {
       const [exams, grps, nakes, drvs, locs] = await Promise.all([
-        getTenkoExaminations(),
-        getDriverGroups(),
-        getNakesList(),
-        getDrivers(),
-        getLocations(),
+        getTenkoExaminations(undefined, forceRefresh),
+        getDriverGroups(forceRefresh),
+        getNakesList(forceRefresh),
+        getDrivers(forceRefresh),
+        getLocations(forceRefresh),
       ]);
+      lastSyncAtRef.current = Date.now();
       setExaminations(exams);
       setDriverGroups(grps);
       setNakesList(nakes);
@@ -323,7 +329,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       );
       showToast(`Berhasil menghapus ${count} data pemeriksaan TENKO. Database siap menerima data real.`, 'success');
       setIsDeleteModalOpen(false);
-      await loadData();
+      await loadData(true, true);
     } catch (err: any) {
       showToast(err.message || 'Gagal menghapus data pemeriksaan.', 'error');
     } finally {
@@ -353,7 +359,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
             id="btn-data-tenko-refresh"
             type="button"
             onClick={() => {
-              loadData(false);
+              loadData(false, true);
               showToast('Data TENKO berhasil disinkronkan.', 'success');
             }}
             disabled={isRefreshing}
@@ -883,7 +889,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         onClose={() => setIsImportModalOpen(false)}
         onSuccess={() => {
           setIsImportModalOpen(false);
-          loadData();
+          loadData(true, true);
         }}
         existingDrivers={driversList}
         existingGroups={driverGroups}

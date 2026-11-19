@@ -14,6 +14,9 @@ import { DriverGroup, Location, Nakes, User } from '../types';
 import { logAuditAction } from './auditService';
 import { INITIAL_DRIVER_GROUPS, INITIAL_LOCATIONS, INITIAL_NAKES } from './seedData';
 import { generateLocationDocId, sanitizeCode } from '../utils/idGenerators';
+import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
+
+const MASTER_CACHE_TTL_MS = 180_000; // 3 minutes
 
 function cleanUpdatePayload(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
@@ -26,31 +29,41 @@ function cleanUpdatePayload(obj: Record<string, any>): Record<string, any> {
 }
 
 // ================= DRIVER GROUPS =================
-export async function getDriverGroups(): Promise<DriverGroup[]> {
-  try {
-    const snap = await getDocs(collection(db, 'driverGroups'));
-    if (!snap.empty) {
-      const groups = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          groupDocumentId: d.id,
-          groupId: data.groupId || d.id,
-          groupName: data.groupName || data.driverGroupName || d.id,
-          description: data.description || '',
-          status: data.status || 'ACTIVE',
-          createdAt: data.createdAt || new Date().toISOString(),
-          createdBy: data.createdBy || 'System',
-          updatedAt: data.updatedAt,
-          updatedBy: data.updatedBy,
-        } as DriverGroup;
-      });
-      return groups.sort((a, b) => a.groupName.localeCompare(b.groupName, undefined, { numeric: true, sensitivity: 'base' }));
-    }
-    return INITIAL_DRIVER_GROUPS;
-  } catch (e) {
-    console.warn('Fallback to local driver groups (Firestore quota/offline):', e);
-    return INITIAL_DRIVER_GROUPS;
-  }
+export async function getDriverGroups(forceRefresh: boolean = false): Promise<DriverGroup[]> {
+  let fetchedFromServer = false;
+  return getOrFetch(
+    'driverGroups:all',
+    async () => {
+      try {
+        const snap = await getDocs(collection(db, 'driverGroups'));
+        fetchedFromServer = true;
+        if (!snap.empty) {
+          const groups = snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              groupDocumentId: d.id,
+              groupId: data.groupId || d.id,
+              groupName: data.groupName || data.driverGroupName || d.id,
+              description: data.description || '',
+              status: data.status || 'ACTIVE',
+              createdAt: data.createdAt || new Date().toISOString(),
+              createdBy: data.createdBy || 'System',
+              updatedAt: data.updatedAt,
+              updatedBy: data.updatedBy,
+            } as DriverGroup;
+          });
+          return groups.sort((a, b) => a.groupName.localeCompare(b.groupName, undefined, { numeric: true, sensitivity: 'base' }));
+        }
+        return INITIAL_DRIVER_GROUPS;
+      } catch (e) {
+        console.warn('Fallback to local driver groups (Firestore quota/offline):', e);
+        return INITIAL_DRIVER_GROUPS;
+      }
+    },
+    MASTER_CACHE_TTL_MS,
+    forceRefresh,
+    () => fetchedFromServer
+  );
 }
 
 export async function createDriverGroup(
@@ -69,6 +82,7 @@ export async function createDriverGroup(
   };
 
   await setDoc(doc(db, 'driverGroups', docId), newGroup);
+  invalidateCachePrefix('driverGroups:');
 
   await logAuditAction({
     action: 'CREATE',
@@ -99,6 +113,7 @@ export async function updateDriverGroup(
   });
 
   await updateDoc(docRef, dataToUpdate);
+  invalidateCachePrefix('driverGroups:');
 
   await logAuditAction({
     action: 'UPDATE',
@@ -122,6 +137,7 @@ export async function deleteDriverGroup(
   const prev = snap.exists() ? snap.data() : null;
 
   await deleteDoc(docRef);
+  invalidateCachePrefix('driverGroups:');
 
   await logAuditAction({
     action: 'DELETE',
@@ -134,30 +150,40 @@ export async function deleteDriverGroup(
 }
 
 // ================= LOCATIONS =================
-export async function getLocations(): Promise<Location[]> {
-  try {
-    const snap = await getDocs(collection(db, 'locations'));
-    if (!snap.empty) {
-      return snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          locationDocumentId: d.id,
-          locationId: data.locationId || d.id,
-          locationName: data.locationName || d.id,
-          address: data.address || '',
-          status: data.status || 'ACTIVE',
-          createdAt: data.createdAt || new Date().toISOString(),
-          createdBy: data.createdBy || 'System',
-          updatedAt: data.updatedAt,
-          updatedBy: data.updatedBy,
-        } as Location;
-      });
-    }
-    return INITIAL_LOCATIONS;
-  } catch (e) {
-    console.warn('Fallback to local locations (Firestore quota/offline):', e);
-    return INITIAL_LOCATIONS;
-  }
+export async function getLocations(forceRefresh: boolean = false): Promise<Location[]> {
+  let fetchedFromServer = false;
+  return getOrFetch(
+    'locations:all',
+    async () => {
+      try {
+        const snap = await getDocs(collection(db, 'locations'));
+        fetchedFromServer = true;
+        if (!snap.empty) {
+          return snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              locationDocumentId: d.id,
+              locationId: data.locationId || d.id,
+              locationName: data.locationName || d.id,
+              address: data.address || '',
+              status: data.status || 'ACTIVE',
+              createdAt: data.createdAt || new Date().toISOString(),
+              createdBy: data.createdBy || 'System',
+              updatedAt: data.updatedAt,
+              updatedBy: data.updatedBy,
+            } as Location;
+          });
+        }
+        return INITIAL_LOCATIONS;
+      } catch (e) {
+        console.warn('Fallback to local locations (Firestore quota/offline):', e);
+        return INITIAL_LOCATIONS;
+      }
+    },
+    MASTER_CACHE_TTL_MS,
+    forceRefresh,
+    () => fetchedFromServer
+  );
 }
 
 export async function createLocation(
@@ -176,6 +202,7 @@ export async function createLocation(
   };
 
   await setDoc(doc(db, 'locations', docId), newLoc);
+  invalidateCachePrefix('locations:');
 
   await logAuditAction({
     action: 'CREATE',
@@ -206,6 +233,7 @@ export async function updateLocation(
   });
 
   await updateDoc(docRef, dataToUpdate);
+  invalidateCachePrefix('locations:');
 
   await logAuditAction({
     action: 'UPDATE',
@@ -229,6 +257,7 @@ export async function deleteLocation(
   const prev = snap.exists() ? snap.data() : null;
 
   await deleteDoc(docRef);
+  invalidateCachePrefix('locations:');
 
   await logAuditAction({
     action: 'DELETE',
@@ -241,32 +270,42 @@ export async function deleteLocation(
 }
 
 // ================= NAKES =================
-export async function getNakesList(): Promise<Nakes[]> {
-  try {
-    const snap = await getDocs(collection(db, 'nakes'));
-    if (!snap.empty) {
-      return snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          nakesDocumentId: d.id,
-          nakesId: data.nakesId || d.id,
-          fullName: data.fullName || '',
-          sipNumber: data.sipNumber || '',
-          phoneNumber: data.phoneNumber || '',
-          email: data.email || '',
-          status: data.status || 'ACTIVE',
-          createdAt: data.createdAt || new Date().toISOString(),
-          createdBy: data.createdBy || 'System',
-          updatedAt: data.updatedAt,
-          updatedBy: data.updatedBy,
-        } as Nakes;
-      });
-    }
-    return INITIAL_NAKES;
-  } catch (e) {
-    console.warn('Fallback to local nakes (Firestore quota/offline):', e);
-    return INITIAL_NAKES;
-  }
+export async function getNakesList(forceRefresh: boolean = false): Promise<Nakes[]> {
+  let fetchedFromServer = false;
+  return getOrFetch(
+    'nakes:all',
+    async () => {
+      try {
+        const snap = await getDocs(collection(db, 'nakes'));
+        fetchedFromServer = true;
+        if (!snap.empty) {
+          return snap.docs.map((d) => {
+            const data = d.data();
+            return {
+              nakesDocumentId: d.id,
+              nakesId: data.nakesId || d.id,
+              fullName: data.fullName || '',
+              sipNumber: data.sipNumber || '',
+              phoneNumber: data.phoneNumber || '',
+              email: data.email || '',
+              status: data.status || 'ACTIVE',
+              createdAt: data.createdAt || new Date().toISOString(),
+              createdBy: data.createdBy || 'System',
+              updatedAt: data.updatedAt,
+              updatedBy: data.updatedBy,
+            } as Nakes;
+          });
+        }
+        return INITIAL_NAKES;
+      } catch (e) {
+        console.warn('Fallback to local nakes (Firestore quota/offline):', e);
+        return INITIAL_NAKES;
+      }
+    },
+    MASTER_CACHE_TTL_MS,
+    forceRefresh,
+    () => fetchedFromServer
+  );
 }
 
 export async function createNakes(
@@ -287,6 +326,7 @@ export async function createNakes(
   };
 
   await setDoc(doc(db, 'nakes', docId), newNakes);
+  invalidateCachePrefix('nakes:');
 
   await logAuditAction({
     action: 'CREATE',
@@ -317,6 +357,7 @@ export async function updateNakes(
   });
 
   await updateDoc(docRef, dataToUpdate);
+  invalidateCachePrefix('nakes:');
 
   await logAuditAction({
     action: 'UPDATE',
@@ -340,6 +381,7 @@ export async function deleteNakes(
   const prev = snap.exists() ? snap.data() : null;
 
   await deleteDoc(docRef);
+  invalidateCachePrefix('nakes:');
 
   await logAuditAction({
     action: 'DELETE',
