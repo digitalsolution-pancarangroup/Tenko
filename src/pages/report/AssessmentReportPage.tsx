@@ -24,6 +24,7 @@ import {
   FileText,
   Activity,
   Eye,
+  Check,
 } from 'lucide-react';
 import { TenkoExamination, Driver, DriverGroup, Location } from '../../types';
 import { getTenkoExaminations } from '../../services/tenkoService';
@@ -50,11 +51,15 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
   const [reportMode, setReportMode] = useState<'DRIVER' | 'GROUP' | 'ALL'>('DRIVER');
 
   // Filter States: From Date - To Date Range & Recommendation
-  const today = new Date().toISOString().split('T')[0];
-  const firstDayOfYear = `${new Date().getFullYear()}-01-01`;
+  const nowLocal = new Date();
+  const today = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
+  const firstDayOfYear = `${nowLocal.getFullYear()}-01-01`;
   const [startDate, setStartDate] = useState<string>(firstDayOfYear);
   const [endDate, setEndDate] = useState<string>(today);
-  const [selectedGroup, setSelectedGroup] = useState<string>('ALL');
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [groupSearchInput, setGroupSearchInput] = useState<string>('');
+  const [showGroupDropdown, setShowGroupDropdown] = useState<boolean>(false);
+  const groupDropdownRef = useRef<HTMLDivElement>(null);
   const [selectedRecommendation, setSelectedRecommendation] = useState<string>('ALL');
 
   // Driver ID search & Autocomplete
@@ -70,7 +75,7 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
     loadData();
   }, []);
 
-  // Handle outside click for driver autocomplete dropdown
+  // Handle outside click for autocomplete dropdowns
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -78,6 +83,12 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
         !driverInputContainerRef.current.contains(e.target as Node)
       ) {
         setShowDriverDropdown(false);
+      }
+      if (
+        groupDropdownRef.current &&
+        !groupDropdownRef.current.contains(e.target as Node)
+      ) {
+        setShowGroupDropdown(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -187,6 +198,56 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
     return dateStr;
   };
 
+  // Filtered Driver Group options for multi-select search
+  const filteredGroupOptions = useMemo(() => {
+    const q = groupSearchInput.toLowerCase().trim();
+    if (!q) return driverGroups;
+    return driverGroups.filter((g) => {
+      const name = (g.groupName || '').toLowerCase();
+      const id = (g.groupId || '').toLowerCase();
+      return name.includes(q) || id.includes(q);
+    });
+  }, [driverGroups, groupSearchInput]);
+
+  const handleToggleGroup = (groupValue: string) => {
+    setSelectedGroups((prev) =>
+      prev.includes(groupValue)
+        ? prev.filter((item) => item !== groupValue)
+        : [...prev, groupValue]
+    );
+  };
+
+  const handleSelectFilteredGroups = () => {
+    const visibleValues = filteredGroupOptions
+      .map((g) => g.groupName || g.groupId)
+      .filter((v): v is string => Boolean(v));
+    setSelectedGroups((prev) => Array.from(new Set<string>([...prev, ...visibleValues])));
+  };
+
+  const handleClearGroups = () => {
+    setSelectedGroups([]);
+  };
+
+  // Precompute normalized matcher set (matches both groupName and groupId snapshots)
+  const selectedGroupMatchers = useMemo(() => {
+    const matchers = new Set<string>();
+    if (selectedGroups.length === 0) return matchers;
+
+    const selectedUpper = new Set<string>(selectedGroups.map((s) => s.trim().toUpperCase()));
+    selectedGroups.forEach((s) => matchers.add(s.trim().toUpperCase()));
+
+    driverGroups.forEach((g) => {
+      const gName = (g.groupName || '').trim().toUpperCase();
+      const gId = (g.groupId || '').trim().toUpperCase();
+      if ((gName && selectedUpper.has(gName)) || (gId && selectedUpper.has(gId))) {
+        if (gName) matchers.add(gName);
+        if (gId) matchers.add(gId);
+      }
+    });
+
+    return matchers;
+  }, [selectedGroups, driverGroups]);
+
   // Filtered Examinations based on all active criteria
   const filteredExaminations = useMemo(() => {
     return examinations.filter((exam) => {
@@ -198,12 +259,11 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
         if (examDrvId !== targetDrvId) return false;
       }
 
-      // 2. Group Mode Filter
+      // 2. Group Mode Filter (Multi-Select)
       if (reportMode === 'GROUP') {
-        if (selectedGroup !== 'ALL') {
+        if (selectedGroups.length > 0) {
           const examGrp = (exam.driverGroupSnapshot || '').trim().toUpperCase();
-          const targetGrp = selectedGroup.trim().toUpperCase();
-          if (examGrp !== targetGrp) return false;
+          if (!examGrp || !selectedGroupMatchers.has(examGrp)) return false;
         }
       }
 
@@ -227,7 +287,8 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
     examinations,
     reportMode,
     selectedDriver,
-    selectedGroup,
+    selectedGroups,
+    selectedGroupMatchers,
     startDate,
     endDate,
     selectedRecommendation,
@@ -285,11 +346,19 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
     const driverNameText =
       reportMode === 'DRIVER'
         ? (selectedDriver?.fullName || '-')
-        : `SEMUA DRIVER (${reportMode === 'GROUP' ? selectedGroup : 'ALL'})`;
+        : reportMode === 'GROUP'
+        ? selectedGroups.length > 0
+          ? `SEMUA DRIVER (${selectedGroups.length} GROUP TERPILIH)`
+          : 'SEMUA DRIVER (ALL GROUPS)'
+        : 'SEMUA DRIVER (ALL)';
     const driverGroupText =
       reportMode === 'DRIVER'
         ? (selectedDriver?.driverGroupId || '---')
-        : (selectedGroup !== 'ALL' ? selectedGroup : 'ALL GROUPS');
+        : reportMode === 'GROUP'
+        ? selectedGroups.length > 0
+          ? selectedGroups.join(', ')
+          : 'ALL GROUPS'
+        : 'ALL GROUPS';
 
     const periodText =
       startDate && endDate
@@ -459,9 +528,9 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
       </div>
 
       {/* Main Filter & Assessment Header Form */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs">
         {/* Single Main Header Banner */}
-        <div className="bg-linear-to-r from-slate-900 via-blue-950 to-indigo-950 p-5 sm:p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div className="bg-linear-to-r from-slate-900 via-blue-950 to-indigo-950 p-5 sm:p-6 text-white flex flex-col md:flex-row items-start md:items-center justify-between gap-4 rounded-t-3xl">
           <div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
               Assessment Report
@@ -603,28 +672,174 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
                   </div>
                 </>
               ) : reportMode === 'GROUP' ? (
-                /* Group Mode Selection */
-                <div className="space-y-3.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                    <label className="text-xs font-bold text-slate-800 w-20 shrink-0">
+                /* Group Mode Multi-Select */
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+                    <label className="text-xs font-bold text-slate-800 w-24 shrink-0 sm:pt-2.5">
                       Group Armada
                     </label>
-                    <select
-                      value={selectedGroup}
-                      onChange={(e) => setSelectedGroup(e.target.value)}
-                      className="flex-1 px-3.5 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs"
-                    >
-                      <option value="ALL">Semua Group Armada ({driverGroups.length})</option>
-                      {driverGroups.map((g) => (
-                        <option key={g.groupId} value={g.groupName || g.groupId}>
-                          {g.groupName || g.groupId}
-                        </option>
-                      ))}
-                    </select>
+                    <div ref={groupDropdownRef} className="relative flex-1 space-y-2">
+                      <button
+                        type="button"
+                        id="btn-multi-group-selector"
+                        onClick={() => setShowGroupDropdown((prev) => !prev)}
+                        className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 flex items-center justify-between gap-2 hover:border-blue-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 shadow-xs transition cursor-pointer"
+                      >
+                        <span className="truncate text-left">
+                          {selectedGroups.length === 0
+                            ? `Semua Group Armada (${driverGroups.length})`
+                            : selectedGroups.length === 1
+                            ? selectedGroups[0]
+                            : `${selectedGroups.length} Group Armada Terpilih`}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {selectedGroups.length > 0 && (
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 text-[10px] font-extrabold">
+                              {selectedGroups.length} dipilih
+                            </span>
+                          )}
+                          <ChevronDown
+                            className={`w-4 h-4 text-slate-500 transition-transform ${
+                              showGroupDropdown ? 'rotate-180' : ''
+                            }`}
+                          />
+                        </div>
+                      </button>
+
+                      {/* Multi-Select Dropdown Panel */}
+                      {showGroupDropdown && (
+                        <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl z-30 overflow-hidden">
+                          {/* Search & Bulk Actions */}
+                          <div className="p-2.5 bg-slate-50 border-b border-slate-200 space-y-2">
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              <input
+                                type="text"
+                                value={groupSearchInput}
+                                onChange={(e) => setGroupSearchInput(e.target.value)}
+                                placeholder="Cari nama atau kode group armada..."
+                                className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                              />
+                              {groupSearchInput && (
+                                <button
+                                  type="button"
+                                  onClick={() => setGroupSearchInput('')}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={handleSelectFilteredGroups}
+                                  className="px-2 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition cursor-pointer"
+                                >
+                                  Pilih {groupSearchInput ? `Hasil (${filteredGroupOptions.length})` : 'Semua'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={handleClearGroups}
+                                  className="px-2 py-1 rounded-md bg-slate-200/70 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer"
+                                >
+                                  Reset (Semua Group)
+                                </button>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setShowGroupDropdown(false)}
+                                className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-900 text-white font-bold transition cursor-pointer"
+                              >
+                                Selesai
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Options List */}
+                          <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                            {filteredGroupOptions.length === 0 ? (
+                              <div className="p-4 text-xs text-slate-500 text-center">
+                                Group armada tidak ditemukan untuk kata kunci &ldquo;{groupSearchInput}&rdquo;.
+                              </div>
+                            ) : (
+                              filteredGroupOptions.map((g) => {
+                                const groupValue = g.groupName || g.groupId;
+                                const isChecked = selectedGroups.includes(groupValue);
+                                return (
+                                  <button
+                                    key={g.groupDocumentId || g.groupId || groupValue}
+                                    type="button"
+                                    onClick={() => handleToggleGroup(groupValue)}
+                                    className={`w-full text-left px-3.5 py-2 flex items-center gap-2.5 text-xs transition cursor-pointer ${
+                                      isChecked ? 'bg-blue-50/80 text-blue-900 font-bold' : 'hover:bg-slate-50 text-slate-700 font-medium'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition ${
+                                        isChecked
+                                          ? 'bg-blue-600 border-blue-600 text-white'
+                                          : 'bg-white border-slate-300'
+                                      }`}
+                                    >
+                                      {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                    </span>
+                                    <span className="truncate flex-1">{groupValue}</span>
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Selected Chips */}
+                      {selectedGroups.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {selectedGroups.map((grp) => (
+                            <span
+                              key={grp}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-blue-100/80 text-blue-900 border border-blue-200 text-[11px] font-semibold"
+                            >
+                              <span className="max-w-[220px] truncate">{grp}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleToggleGroup(grp)}
+                                className="text-blue-700 hover:text-rose-600 cursor-pointer"
+                                title={`Hapus ${grp}`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                          {selectedGroups.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={handleClearGroups}
+                              className="text-[11px] font-bold text-rose-600 hover:text-rose-700 px-1.5 py-0.5 cursor-pointer"
+                            >
+                              Hapus Semua
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="p-3 bg-blue-50/60 rounded-xl text-xs text-blue-900 border border-blue-200">
-                    Menampilkan seluruh pemeriksaan TENKO dari armada dalam group{' '}
-                    <strong>{selectedGroup === 'ALL' ? 'Semua Group' : selectedGroup}</strong>.
+                    {selectedGroups.length === 0 ? (
+                      <>
+                        Menampilkan seluruh pemeriksaan TENKO dari armada dalam{' '}
+                        <strong>Semua Group ({driverGroups.length})</strong>.
+                      </>
+                    ) : (
+                      <>
+                        Menampilkan pemeriksaan TENKO dari{' '}
+                        <strong>{selectedGroups.length} Group Armada terpilih</strong>:{' '}
+                        <span className="font-semibold">{selectedGroups.join(', ')}</span>.
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -835,14 +1050,21 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
                         {dateStr}
                       </td>
 
-                      {/* Driver Name & ID (in Group/All mode) */}
+                      {/* Driver Name, ID & Group (in Group/All mode) */}
                       {reportMode !== 'DRIVER' && (
                         <td className="px-3.5 py-3 border-r border-slate-200 text-left">
                           <div className="font-bold text-slate-900">
                             {exam.driverNameSnapshot}
                           </div>
-                          <div className="font-mono text-[10px] text-blue-700 font-semibold">
-                            {exam.driverId}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                            <span className="font-mono text-[10px] text-blue-700 font-semibold">
+                              {exam.driverId}
+                            </span>
+                            {exam.driverGroupSnapshot && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 font-medium border border-slate-200 max-w-[200px] truncate" title={exam.driverGroupSnapshot}>
+                                {exam.driverGroupSnapshot}
+                              </span>
+                            )}
                           </div>
                         </td>
                       )}
@@ -935,7 +1157,7 @@ export const AssessmentReportPage: React.FC<AssessmentReportPageProps> = ({
         </div>
 
         {/* Footer Summary / Disclaimer */}
-        <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="p-4 bg-slate-50 border-t border-slate-200 text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 rounded-b-3xl">
           <span>
             Standar Evaluasi TENKO: <strong>K3 Logistik & Transport Safety Policy</strong>
           </span>
