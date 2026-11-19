@@ -707,12 +707,11 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-slate-100/80">
-            <table className="w-full min-w-[1340px] text-left text-xs border-collapse">
+            <table className="w-full min-w-[1200px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-3.5 pl-4 min-w-[160px]">ID TENKO</th>
                   <th className="py-3 px-3.5 min-w-[140px]">Tanggal Pemeriksaan</th>
-                  <th className="py-3 px-3.5 min-w-[140px]">Created Date</th>
                   <th className="py-3 px-3.5 min-w-[180px]">Driver / Kenek</th>
                   <th className="py-3 px-3.5 min-w-[100px]">Posisi</th>
                   <th className="py-3 px-3.5 min-w-[180px]">Lokasi / Pool</th>
@@ -727,12 +726,6 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {paginatedExams.map((exam) => {
-                  const createdObj = exam.createdAt ? new Date(exam.createdAt) : null;
-                  const hasValidCreated = Boolean(createdObj && Number.isFinite(createdObj.getTime()));
-                  const createdLocalDate = hasValidCreated && createdObj
-                    ? `${createdObj.getFullYear()}-${String(createdObj.getMonth() + 1).padStart(2, '0')}-${String(createdObj.getDate()).padStart(2, '0')}`
-                    : '';
-
                   return (
                   <tr key={exam.tenkoDocumentId || exam.tenkoId} className="hover:bg-blue-50/40 transition">
                     <td className="py-3.5 px-3.5 pl-4 font-mono font-bold text-blue-900 whitespace-nowrap">{exam.tenkoId}</td>
@@ -743,18 +736,6 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                           ? `${new Date(exam.finishTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
                           : '-'}
                       </span>
-                    </td>
-                    <td className="py-3.5 px-3.5 text-slate-600 whitespace-nowrap">
-                      {hasValidCreated && createdObj ? (
-                        <>
-                          <span className="font-medium text-slate-700 block">{createdLocalDate}</span>
-                          <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
-                            {createdObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
                     </td>
                     <td className="py-3.5 px-3.5">
                       <span className="font-bold text-slate-900 block">{exam.driverNameSnapshot}</span>
