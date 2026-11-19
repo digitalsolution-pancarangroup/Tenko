@@ -72,7 +72,16 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   );
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
-  // Form State: STEP 1 - Driver
+  const getLocalTodayDate = (): string => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  // Form State: STEP 1 - Driver & Examination Date
+  const [examinationDate, setExaminationDate] = useState<string>(() => getLocalTodayDate());
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [driverPhoneNumber, setDriverPhoneNumber] = useState<string>('');
 
@@ -115,6 +124,18 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
     const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     return localIso;
   });
+
+  const handleExaminationDateChange = (newDate: string) => {
+    setExaminationDate(newDate);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+      const timePart = finishTime && finishTime.length >= 16 ? finishTime.slice(11, 16) : '08:00';
+      setFinishTime(`${newDate}T${timePart}`);
+    }
+  };
+
+  const todayLocalDate = getLocalTodayDate();
+  const isBackdateExam = Boolean(examinationDate && examinationDate < todayLocalDate);
+  const isFutureDateExam = Boolean(examinationDate && examinationDate > todayLocalDate);
 
   const [stepError, setStepError] = useState<string>('');
 
@@ -243,6 +264,10 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   const validateCurrentStep = (): boolean => {
     setStepError('');
     if (currentStep === 1) {
+      if (!examinationDate) {
+        setStepError('Silakan tentukan Tanggal Pemeriksaan terlebih dahulu.');
+        return false;
+      }
       if (!selectedDriver) {
         setStepError('Silakan cari dan pilih Driver / Kenek terlebih dahulu.');
         return false;
@@ -378,7 +403,11 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
     if (!selectedDriver) return;
     setLoading(true);
     try {
-      const examDate = new Date().toISOString().split('T')[0];
+      const examDate = examinationDate || getLocalTodayDate();
+      const parsedFinish = finishTime ? new Date(finishTime) : new Date(`${examDate}T08:00:00`);
+      const validFinishIso = Number.isFinite(parsedFinish.getTime())
+        ? parsedFinish.toISOString()
+        : new Date(`${examDate}T08:00:00`).toISOString();
       const cleanPhone = driverPhoneNumber.trim() || selectedDriver.phoneNumber || '';
       const created = await createTenkoExamination(
         {
@@ -414,7 +443,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
           note: note.trim(),
           examinerUserId: currentUser?.userId || 'SYS_NAKES',
           examinerName: currentUser?.fullName || 'Ns. Ratna Sari, S.Kep',
-          finishTime: new Date(finishTime).toISOString(),
+          finishTime: validFinishIso,
           locationId: selectedLocation,
           locationNameSnapshot: selectedLocation,
         },
@@ -597,46 +626,88 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               </p>
             </div>
 
-            {/* Field: Lokasi / Pool Pemeriksaan */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  <span>Lokasi / Pool Pemeriksaan TENKO</span>
-                  <span className="text-rose-500">*</span>
-                </label>
-                {currentUser?.locationName && (
-                  <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded">
-                    Pool Petugas: {currentUser.locationName}
-                  </span>
-                )}
+            {/* Field: Lokasi / Pool & Tanggal Pemeriksaan */}
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>Lokasi / Pool Pemeriksaan TENKO</span>
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  {currentUser?.locationName && (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded truncate max-w-[180px]" title={`Pool Petugas: ${currentUser.locationName}`}>
+                      Pool Petugas: {currentUser.locationName}
+                    </span>
+                  )}
+                </div>
+                <select
+                  id="select-examination-location"
+                  value={selectedLocation}
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
+                >
+                  {availableLocations.length > 0 ? (
+                    availableLocations.map((loc) => (
+                      <option key={loc.locationId || loc.locationDocumentId} value={loc.locationName}>
+                        {loc.locationName}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Pool Tanah Merdeka - Cilincing">Pool Tanah Merdeka - Cilincing</option>
+                      <option value="Pool Marunda - Jakarta Utara">Pool Marunda - Jakarta Utara</option>
+                      <option value="Pool Cikarang Central - Bekasi">Pool Cikarang Central - Bekasi</option>
+                      <option value="Pool Tanjung Perak - Surabaya">Pool Tanjung Perak - Surabaya</option>
+                      <option value="Pool Tanjung Emas - Semarang">Pool Tanjung Emas - Semarang</option>
+                      <option value="Pool Belawan - Medan">Pool Belawan - Medan</option>
+                    </>
+                  )}
+                </select>
+                <p className="text-[11px] text-slate-500">
+                  Pemeriksaan ini dicatat dan diarsipkan di bawah lokasi pool ini.
+                </p>
               </div>
-              <select
-                id="select-examination-location"
-                value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-300 font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
-              >
-                {availableLocations.length > 0 ? (
-                  availableLocations.map((loc) => (
-                    <option key={loc.locationId || loc.locationDocumentId} value={loc.locationName}>
-                      {loc.locationName}
-                    </option>
-                  ))
-                ) : (
-                  <>
-                    <option value="Pool Tanah Merdeka - Cilincing">Pool Tanah Merdeka - Cilincing</option>
-                    <option value="Pool Marunda - Jakarta Utara">Pool Marunda - Jakarta Utara</option>
-                    <option value="Pool Cikarang Central - Bekasi">Pool Cikarang Central - Bekasi</option>
-                    <option value="Pool Tanjung Perak - Surabaya">Pool Tanjung Perak - Surabaya</option>
-                    <option value="Pool Tanjung Emas - Semarang">Pool Tanjung Emas - Semarang</option>
-                    <option value="Pool Belawan - Medan">Pool Belawan - Medan</option>
-                  </>
-                )}
-              </select>
-              <p className="text-[11px] text-slate-500">
-                Pemeriksaan ini dicatat dan diarsipkan di bawah lokasi pool ini.
-              </p>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="input-examination-date" className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
+                    <span>Tanggal Pemeriksaan</span>
+                    <span className="text-rose-500">*</span>
+                  </label>
+                  {isBackdateExam ? (
+                    <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                      Mode Backdate
+                    </span>
+                  ) : isFutureDateExam ? (
+                    <span className="text-[10px] font-extrabold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded">
+                      Tanggal Masa Depan
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">
+                      Hari Ini
+                    </span>
+                  )}
+                </div>
+                <input
+                  id="input-examination-date"
+                  type="date"
+                  value={examinationDate}
+                  onChange={(e) => handleExaminationDateChange(e.target.value)}
+                  className={`w-full px-4 py-2.5 rounded-xl border font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 ${
+                    isBackdateExam
+                      ? 'border-amber-400 text-amber-900'
+                      : isFutureDateExam
+                      ? 'border-indigo-400 text-indigo-900'
+                      : 'border-slate-300 text-slate-900'
+                  }`}
+                  required
+                />
+                <p className="text-[11px] text-slate-500">
+                  Otomatis tanggal hari ini; dapat diubah bila ada pencatatan data susulan (backdate).
+                </p>
+              </div>
             </div>
 
             {/* Selected Driver Banner if chosen */}
@@ -1989,6 +2060,24 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
 
             {/* Summary Highlights */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2.5">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Tanggal Pemeriksaan:</span>
+                <div className="flex items-center gap-2">
+                  {isBackdateExam && (
+                    <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                      Backdate
+                    </span>
+                  )}
+                  {isFutureDateExam && (
+                    <span className="text-[10px] font-extrabold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded">
+                      Masa Depan
+                    </span>
+                  )}
+                  <span className="font-mono font-bold text-slate-900">
+                    {examinationDate} {finishTime ? `• ${finishTime.slice(11, 16)} WIB` : ''}
+                  </span>
+                </div>
+              </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Lokasi / Pool:</span>
                 <span className="font-bold text-blue-700">{selectedLocation}</span>

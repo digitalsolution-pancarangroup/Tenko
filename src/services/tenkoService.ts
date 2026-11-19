@@ -63,24 +63,43 @@ export interface TenkoImportResult {
   errors: string[];
 }
 
-export async function generateNextTenkoId(): Promise<{ tenkoId: string; sequenceNumber: number }> {
+function getTimestampMs(value?: string): number {
+  if (!value) return 0;
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+export function compareExaminationsByExamDateDesc(a: TenkoExamination, b: TenkoExamination): number {
+  const dateA = (a.examinationDate || a.createdAt || '').slice(0, 10);
+  const dateB = (b.examinationDate || b.createdAt || '').slice(0, 10);
+  if (dateA !== dateB) {
+    return dateB.localeCompare(dateA);
+  }
+
+  const finishA = getTimestampMs(a.finishTime);
+  const finishB = getTimestampMs(b.finishTime);
+  if (finishA !== finishB) {
+    return finishB - finishA;
+  }
+
+  return getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt);
+}
+
+export async function generateNextTenkoId(targetDateIso?: string): Promise<{ tenkoId: string; sequenceNumber: number }> {
   const now = new Date();
-  const yyyy = now.getFullYear();
-  const mm = String(now.getMonth() + 1).padStart(2, '0');
-  const dd = String(now.getDate()).padStart(2, '0');
-  const datePrefix = `${yyyy}${mm}${dd}`;
-  const todayIso = `${yyyy}-${mm}-${dd}`;
+  let queryDateIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if (targetDateIso && /^\d{4}-\d{2}-\d{2}$/.test(targetDateIso.trim())) {
+    queryDateIso = targetDateIso.trim();
+  }
+  const datePrefix = queryDateIso.replace(/-/g, '');
 
   try {
     const q = query(
       collection(db, 'tenkoExaminations'),
-      where('examinationDate', '==', todayIso)
+      where('examinationDate', '==', queryDateIso)
     );
     const snap = await getDocs(q);
-    const todayExams = snap.docs
-      .map((d) => d.data() as TenkoExamination)
-      .filter((e) => e.tenkoId && e.tenkoId.startsWith(`TENKO-${datePrefix}`));
-    const nextSeq = todayExams.length + 1;
+    const nextSeq = snap.size + 1;
     const formattedSeq = String(nextSeq).padStart(4, '0');
     return {
       tenkoId: `TENKO-${datePrefix}-${formattedSeq}`,
@@ -154,6 +173,7 @@ export async function getTenkoExaminations(
           ...d.data(),
         }) as TenkoExamination);
 
+        list.sort(compareExaminationsByExamDateDesc);
         return mergeGateLogsIntoExams(list, gateLogsSnap);
       } catch (_error) {
         try {
@@ -168,9 +188,7 @@ export async function getTenkoExaminations(
             tenkoDocumentId: d.id,
           }) as TenkoExamination);
 
-          const sorted = list.sort(
-            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
+          const sorted = list.sort(compareExaminationsByExamDateDesc);
 
           return mergeGateLogsIntoExams(sorted, gateLogsSnap);
         } catch (fallbackErr) {
@@ -232,23 +250,15 @@ export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamina
         ...d.data(),
         tenkoDocumentId: d.id,
       }) as TenkoExamination);
-      driverDocs.sort((a, b) => {
-        const timeA = new Date(a.createdAt || a.examinationDate || 0).getTime();
-        const timeB = new Date(b.createdAt || b.examinationDate || 0).getTime();
-        return timeB - timeA;
-      });
+      driverDocs.sort(compareExaminationsByExamDateDesc);
       return driverDocs[0];
     }
 
-    // 3. Fallback: Search cached examinations sorted newest first (createdAt desc)
+    // 3. Fallback: Search cached examinations sorted newest examinationDate first
     const allDocs = [...(await getTenkoExaminations())];
 
-    // Sort descending so if a driverId is entered, we get the LATEST examination!
-    allDocs.sort((a, b) => {
-      const timeA = new Date(a.createdAt || a.examinationDate || 0).getTime();
-      const timeB = new Date(b.createdAt || b.examinationDate || 0).getTime();
-      return timeB - timeA;
-    });
+    // Sort descending by examinationDate so if a driverId is entered, backdated entries never override today's exam
+    allDocs.sort(compareExaminationsByExamDateDesc);
 
     const match = allDocs.find((data) => {
       return (
@@ -372,8 +382,25 @@ export async function createTenkoExamination(
   examData: Omit<TenkoExamination, 'tenkoDocumentId' | 'sequenceNumber' | 'tenkoId' | 'createdAt' | 'createdBy' | 'bloodPressureResult'>,
   currentUser: { userId: string; fullName: string }
 ): Promise<TenkoExamination> {
-  const { sequenceNumber } = await generateNextTenkoId();
-  const docId = generateTenkoExaminationId(examData.driverId || 'DRV');
+  const { sequenceNumber } = await generateNextTenkoId(examData.examinationDate);
+  let idDate = new Date();
+  if (examData.finishTime) {
+    const parsedFinish = new Date(examData.finishTime);
+    if (Number.isFinite(parsedFinish.getTime())) {
+      idDate = parsedFinish;
+    }
+  } else if (examData.examinationDate && /^\d{4}-\d{2}-\d{2}$/.test(examData.examinationDate)) {
+    const parsedExam = new Date(`${examData.examinationDate}T08:00:00`);
+    if (Number.isFinite(parsedExam.getTime())) {
+      idDate = parsedExam;
+    }
+  }
+  // Ensure YYYYMMDD prefix in ID strictly matches selected examinationDate
+  if (examData.examinationDate && /^\d{4}-\d{2}-\d{2}$/.test(examData.examinationDate)) {
+    const [y, m, d] = examData.examinationDate.split('-').map(Number);
+    idDate = new Date(y, m - 1, d, idDate.getHours(), idDate.getMinutes(), idDate.getSeconds());
+  }
+  const docId = generateTenkoExaminationId(examData.driverId || 'DRV', idDate);
   const tenkoId = docId;
 
   const bpResult = `${examData.bloodPressureSystolic}/${examData.bloodPressureDiastolic} mmHg`;

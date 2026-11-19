@@ -372,7 +372,12 @@ export async function createDriverHealthRecord(
   recordData: Omit<DriverHealthRecord, 'recordDocumentId' | 'recordId' | 'createdAt' | 'createdBy'> & { createdBy?: string },
   currentUser: { userId: string; fullName: string }
 ): Promise<DriverHealthRecord> {
-  const docId = generateDriverHealthRecordDocId(recordData.driverId);
+  let idDate = new Date();
+  if (recordData.examinationDate && /^\d{4}-\d{2}-\d{2}$/.test(recordData.examinationDate)) {
+    const [y, m, d] = recordData.examinationDate.split('-').map(Number);
+    idDate = new Date(y, m - 1, d, idDate.getHours(), idDate.getMinutes(), idDate.getSeconds());
+  }
+  const docId = generateDriverHealthRecordDocId(recordData.driverId, idDate);
   const recordId = docId;
 
   const newRecord: DriverHealthRecord = {

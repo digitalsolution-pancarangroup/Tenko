@@ -1000,7 +1000,10 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
                           </span>
                           <span className="text-[10.5px] text-slate-400 flex items-center gap-1 mt-0.5">
                             <Clock className="w-3 h-3" />
-                            {exam.finishTime ? exam.finishTime.slice(11, 16) : exam.examinationDate}
+                            {exam.examinationDate}
+                            {exam.finishTime && Number.isFinite(new Date(exam.finishTime).getTime())
+                              ? ` • ${new Date(exam.finishTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`
+                              : ''}
                           </span>
                         </td>
 
