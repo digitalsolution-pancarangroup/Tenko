@@ -732,24 +732,12 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   const createdLocalDate = hasValidCreated && createdObj
                     ? `${createdObj.getFullYear()}-${String(createdObj.getMonth() + 1).padStart(2, '0')}-${String(createdObj.getDate()).padStart(2, '0')}`
                     : '';
-                  const isBackdatedEntry = Boolean(
-                    exam.examinationDate &&
-                    createdLocalDate &&
-                    exam.examinationDate < createdLocalDate
-                  );
 
                   return (
                   <tr key={exam.tenkoDocumentId || exam.tenkoId} className="hover:bg-blue-50/40 transition">
                     <td className="py-3.5 px-3.5 pl-4 font-mono font-bold text-blue-900 whitespace-nowrap">{exam.tenkoId}</td>
                     <td className="py-3.5 px-3.5 text-slate-600 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-slate-900">{exam.examinationDate || '-'}</span>
-                        {isBackdatedEntry && (
-                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                            Backdate
-                          </span>
-                        )}
-                      </div>
+                      <span className="font-semibold text-slate-900 block">{exam.examinationDate || '-'}</span>
                       <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
                         {exam.finishTime && Number.isFinite(new Date(exam.finishTime).getTime())
                           ? `${new Date(exam.finishTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB`
