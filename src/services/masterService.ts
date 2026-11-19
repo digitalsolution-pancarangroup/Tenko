@@ -186,15 +186,72 @@ export async function getLocations(forceRefresh: boolean = false): Promise<Locat
   );
 }
 
+export function getNextLocationIdSuggestion(locations: Location[]): string {
+  let maxNum = 0;
+  locations.forEach((loc) => {
+    const candidates = [loc.locationId, loc.locationDocumentId];
+    candidates.forEach((val) => {
+      if (!val) return;
+      const match = String(val).trim().match(/^LOC[-_](\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (Number.isFinite(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+  });
+
+  const nextNum = maxNum + 1;
+  return `LOC-${String(nextNum).padStart(2, '0')}`;
+}
+
 export async function createLocation(
-  locData: { locationId: string; locationName: string; address?: string; status: 'ACTIVE' | 'INACTIVE' },
+  locData: { locationId?: string; locationName: string; address?: string; status: 'ACTIVE' | 'INACTIVE' },
   currentUser: { userId: string; fullName: string }
 ): Promise<Location> {
-  const docId = generateLocationDocId(locData.locationId || locData.locationName);
+  const cleanName = locData.locationName.trim();
+  if (!cleanName) {
+    throw new Error('Nama Lokasi Pool wajib diisi.');
+  }
+
+  // Always check latest locations from Firestore to prevent overwriting or duplicates
+  const existingLocations = await getLocations(true);
+  const duplicateName = existingLocations.find(
+    (l) => l.locationName.trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  if (duplicateName) {
+    throw new Error(`Lokasi Pool "${cleanName}" sudah terdaftar (${duplicateName.locationId}).`);
+  }
+
+  let candidateId = (locData.locationId || '').trim().toUpperCase();
+  if (!candidateId || candidateId === 'LOC-' || candidateId === 'AUTO') {
+    candidateId = getNextLocationIdSuggestion(existingLocations);
+  }
+
+  const existingIds = new Set(
+    existingLocations.map((l) => l.locationId.trim().toUpperCase())
+  );
+  let docId = generateLocationDocId(candidateId);
+
+  // Guarantee unique Location ID & Firestore docId (never overwrite an existing record)
+  let guard = 0;
+  while (guard < 500) {
+    const existingSnap = await getDoc(doc(db, 'locations', docId));
+    if (!existingSnap.exists() && !existingIds.has(candidateId)) {
+      break;
+    }
+    guard += 1;
+    const match = candidateId.match(/^LOC[-_](\d+)$/i);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : existingLocations.length + guard;
+    candidateId = `LOC-${String(nextNum).padStart(2, '0')}`;
+    docId = generateLocationDocId(candidateId);
+  }
+
   const newLoc: Location = {
     locationDocumentId: docId,
-    locationId: locData.locationId.trim().toUpperCase(),
-    locationName: locData.locationName.trim(),
+    locationId: candidateId,
+    locationName: cleanName,
     address: locData.address?.trim() || '',
     status: locData.status || 'ACTIVE',
     createdAt: new Date().toISOString(),

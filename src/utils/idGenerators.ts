@@ -117,12 +117,18 @@ export function generateVitaminDocId(vitaminId: string): string {
  * Example: LOC_MARUNDA, LOC_01
  */
 export function generateLocationDocId(locationIdOrName: string): string {
-  let shortLoc = locationIdOrName.replace(/^pool\s+/i, '').split('-')[0].trim();
-  const clean = sanitizeCode(shortLoc, 'POOL');
-  if (clean.startsWith('LOC_') || clean.startsWith('LOC-')) {
-    return `LOC_${clean.substring(4)}`;
+  const trimmed = (locationIdOrName || '').trim();
+  if (!trimmed) return 'LOC_POOL';
+
+  const cleanFull = sanitizeCode(trimmed, 'POOL');
+  if (cleanFull.startsWith('LOC_') || cleanFull.startsWith('LOC-')) {
+    const suffix = cleanFull.substring(4).replace(/^[-_]+/, '');
+    return suffix ? `LOC_${suffix}` : 'LOC_POOL';
   }
-  return `LOC_${clean}`;
+
+  const shortLoc = trimmed.replace(/^pool\s+/i, '').split('-')[0].trim();
+  const cleanShort = sanitizeCode(shortLoc, 'POOL');
+  return `LOC_${cleanShort}`;
 }
 
 /**
