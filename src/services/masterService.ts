@@ -12,7 +12,7 @@ import {
 import { db } from '../firebase';
 import { DriverGroup, Location, Nakes, User } from '../types';
 import { logAuditAction } from './auditService';
-import { INITIAL_DRIVER_GROUPS, INITIAL_LOCATIONS, INITIAL_NAKES } from './seedData';
+import { INITIAL_DRIVER_GROUPS, INITIAL_NAKES } from './seedData';
 import { generateLocationDocId, sanitizeCode } from '../utils/idGenerators';
 import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
@@ -159,7 +159,7 @@ export async function getLocations(forceRefresh: boolean = false): Promise<Locat
         const snap = await getDocs(collection(db, 'locations'));
         fetchedFromServer = true;
         if (!snap.empty) {
-          return snap.docs.map((d) => {
+          const list = snap.docs.map((d) => {
             const data = d.data();
             return {
               locationDocumentId: d.id,
@@ -173,11 +173,14 @@ export async function getLocations(forceRefresh: boolean = false): Promise<Locat
               updatedBy: data.updatedBy,
             } as Location;
           });
+          return list.sort((a, b) =>
+            a.locationId.localeCompare(b.locationId, undefined, { numeric: true, sensitivity: 'base' })
+          );
         }
-        return INITIAL_LOCATIONS;
+        return [];
       } catch (e) {
-        console.warn('Fallback to local locations (Firestore quota/offline):', e);
-        return INITIAL_LOCATIONS;
+        console.warn('Error fetching locations from Firestore:', e);
+        return [];
       }
     },
     MASTER_CACHE_TTL_MS,
