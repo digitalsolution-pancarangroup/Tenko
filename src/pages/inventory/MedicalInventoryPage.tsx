@@ -295,9 +295,9 @@ export const MedicalInventoryPage: React.FC = () => {
       setNewVitDescription('');
       setNewVitInitialStock(100);
       await loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Gagal membuat master obat.');
+      showToast(err?.message || 'Gagal membuat master obat.');
     } finally {
       setIsSubmittingNewVit(false);
     }

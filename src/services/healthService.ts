@@ -13,7 +13,6 @@ import {
 import { db } from '../firebase';
 import { HealthIndication, VitaminItem, DriverHealthRecord, HealthCaseStatus } from '../types';
 import { logAuditAction } from './auditService';
-import { INITIAL_HEALTH_INDICATIONS, INITIAL_VITAMINS, INITIAL_DRIVER_HEALTH_RECORDS } from './seedData';
 import { generateVitaminDocId, generateDriverHealthRecordDocId, sanitizeCode } from '../utils/idGenerators';
 
 const LOCAL_STORAGE_INDICATIONS_KEY = 'tenko_health_indications';
@@ -31,6 +30,24 @@ function cleanUpdatePayload(obj: Record<string, any>): Record<string, any> {
 }
 
 // ================= MASTER HEALTH INDICATIONS =================
+export function getNextIndicationIdSuggestion(items: HealthIndication[]): string {
+  let maxNum = 0;
+  items.forEach((item) => {
+    const candidates = [item.indicationId, item.indicationDocumentId];
+    candidates.forEach((val) => {
+      if (!val) return;
+      const match = String(val).trim().match(/^IND[-_]?(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (Number.isFinite(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+  });
+  return `IND-${String(maxNum + 1).padStart(2, '0')}`;
+}
+
 export async function getHealthIndications(): Promise<HealthIndication[]> {
   try {
     const snap = await getDocs(collection(db, 'healthIndications'));
@@ -51,46 +68,66 @@ export async function getHealthIndications(): Promise<HealthIndication[]> {
       });
       return items.sort((a, b) => a.name.localeCompare(b.name));
     }
+    return [];
   } catch (e) {
-    console.warn('Firestore fallback to local health indications:', e);
+    console.warn('Error fetching health indications from Firestore:', e);
+    return [];
   }
-
-  // Local storage fallback
-  try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_INDICATIONS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {}
-  return INITIAL_HEALTH_INDICATIONS;
 }
 
 export async function createHealthIndication(
   item: { indicationId?: string; name: string; note: string; status: 'ACTIVE' | 'INACTIVE' },
   currentUser: { userId: string; fullName: string }
 ): Promise<HealthIndication> {
-  const code = item.indicationId || `IND_${Date.now().toString().slice(-4)}`;
-  const docId = sanitizeCode(code, 'IND');
+  const cleanName = item.name.trim();
+  if (!cleanName) {
+    throw new Error('Nama indikasi kesehatan wajib diisi.');
+  }
+
+  const existingItems = await getHealthIndications();
+  const duplicateName = existingItems.find(
+    (ind) => ind.name.trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  if (duplicateName) {
+    throw new Error(`Indikasi "${cleanName}" sudah terdaftar (${duplicateName.indicationId}).`);
+  }
+
+  let code = (item.indicationId || '').trim().toUpperCase();
+  if (!code || code === 'IND-' || code === 'AUTO') {
+    code = getNextIndicationIdSuggestion(existingItems);
+  }
+
+  const existingIds = new Set(existingItems.map((i) => i.indicationId.trim().toUpperCase()));
+  let docId = sanitizeCode(code, 'IND');
+
+  let guard = 0;
+  while (guard < 500) {
+    const existingSnap = await getDoc(doc(db, 'healthIndications', docId));
+    if (!existingSnap.exists() && !existingIds.has(code)) {
+      break;
+    }
+    guard += 1;
+    const match = code.match(/^IND[-_]?(\d+)$/i);
+    const nextNum = match ? parseInt(match[1], 10) + 1 : existingItems.length + guard;
+    code = `IND-${String(nextNum).padStart(2, '0')}`;
+    docId = sanitizeCode(code, 'IND');
+  }
+
   const newIndication: HealthIndication = {
     indicationDocumentId: docId,
     indicationId: code,
-    name: item.name.trim(),
+    name: cleanName,
     note: item.note.trim(),
     status: item.status,
     createdAt: new Date().toISOString(),
     createdBy: currentUser.fullName,
   };
 
-  try {
-    await setDoc(doc(db, 'healthIndications', docId), cleanUpdatePayload(newIndication));
-  } catch (e) {
-    console.warn('Firestore write failed, saving to local cache:', e);
-  }
+  await setDoc(doc(db, 'healthIndications', docId), cleanUpdatePayload(newIndication));
 
-  // Update local storage
+  // Update local storage cache cleanly
   try {
-    const current = await getHealthIndications();
-    const updated = [newIndication, ...current.filter((c) => c.indicationId !== code)];
+    const updated = [newIndication, ...existingItems.filter((c) => c.indicationId !== code)];
     localStorage.setItem(LOCAL_STORAGE_INDICATIONS_KEY, JSON.stringify(updated));
   } catch {}
 
@@ -174,6 +211,24 @@ export async function deleteHealthIndication(
 }
 
 // ================= MASTER VITAMINS =================
+export function getNextVitaminIdSuggestion(items: VitaminItem[]): string {
+  let maxNum = 0;
+  items.forEach((item) => {
+    const candidates = [item.vitaminId, item.vitaminDocumentId];
+    candidates.forEach((val) => {
+      if (!val) return;
+      const match = String(val).trim().match(/VTM[-_]?(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (Number.isFinite(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    });
+  });
+  return `VTM-${String(maxNum + 1).padStart(2, '0')}`;
+}
+
 export async function getVitamins(): Promise<VitaminItem[]> {
   try {
     const snap = await getDocs(collection(db, 'vitamins'));
@@ -196,29 +251,60 @@ export async function getVitamins(): Promise<VitaminItem[]> {
       });
       return items.sort((a, b) => a.name.localeCompare(b.name));
     }
+    return [];
   } catch (e) {
-    console.warn('Firestore fallback to local vitamins:', e);
+    console.warn('Error fetching vitamins from Firestore:', e);
+    return [];
   }
-
-  try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_VITAMINS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {}
-  return INITIAL_VITAMINS;
 }
 
 export async function createVitamin(
   item: { vitaminId?: string; name: string; category?: string; dosageUnit: string; description?: string; status: 'ACTIVE' | 'INACTIVE' },
   currentUser: { userId: string; fullName: string }
 ): Promise<VitaminItem> {
-  const code = item.vitaminId || `VTM_${Date.now().toString().slice(-4)}`;
-  const docId = generateVitaminDocId(code);
+  const cleanName = item.name.trim();
+  if (!cleanName) {
+    throw new Error('Nama vitamin / obat wajib diisi.');
+  }
+
+  const existingItems = await getVitamins();
+  const duplicateName = existingItems.find(
+    (v) => v.name.trim().toLowerCase() === cleanName.toLowerCase()
+  );
+  if (duplicateName) {
+    throw new Error(`Vitamin/Obat "${cleanName}" sudah terdaftar (${duplicateName.vitaminId}).`);
+  }
+
+  const hasExplicitCustomCode = Boolean(item.vitaminId && item.vitaminId.trim() && item.vitaminId.trim().toUpperCase() !== 'AUTO');
+  let code = hasExplicitCustomCode ? item.vitaminId!.trim().toUpperCase() : getNextVitaminIdSuggestion(existingItems);
+  let docId = generateVitaminDocId(code);
+
+  const existingIds = new Set(existingItems.map((v) => v.vitaminId.trim().toUpperCase()));
+
+  // Check for existing docId or vitaminId collision
+  const initialSnap = await getDoc(doc(db, 'vitamins', docId));
+  if (initialSnap.exists() || existingIds.has(code)) {
+    if (hasExplicitCustomCode && !/^VTM[-_]?\d+$/i.test(code)) {
+      throw new Error(`Kode Vitamin "${code}" sudah terdaftar. Gunakan kode lain.`);
+    }
+    let guard = 0;
+    while (guard < 500) {
+      const snap = await getDoc(doc(db, 'vitamins', docId));
+      if (!snap.exists() && !existingIds.has(code)) {
+        break;
+      }
+      guard += 1;
+      const match = code.match(/VTM[-_]?(\d+)$/i);
+      const nextNum = match ? parseInt(match[1], 10) + 1 : existingItems.length + guard;
+      code = `VTM-${String(nextNum).padStart(2, '0')}`;
+      docId = generateVitaminDocId(code);
+    }
+  }
+
   const newVitamin: VitaminItem = {
     vitaminDocumentId: docId,
     vitaminId: code,
-    name: item.name.trim(),
+    name: cleanName,
     category: item.category?.trim() || 'Umum',
     dosageUnit: item.dosageUnit.trim() || 'Tablet',
     description: item.description?.trim() || '',
@@ -227,15 +313,10 @@ export async function createVitamin(
     createdBy: currentUser.fullName,
   };
 
-  try {
-    await setDoc(doc(db, 'vitamins', docId), cleanUpdatePayload(newVitamin));
-  } catch (e) {
-    console.warn('Firestore write failed, saving to local vitamins:', e);
-  }
+  await setDoc(doc(db, 'vitamins', docId), cleanUpdatePayload(newVitamin));
 
   try {
-    const current = await getVitamins();
-    const updated = [newVitamin, ...current.filter((c) => c.vitaminId !== code)];
+    const updated = [newVitamin, ...existingItems.filter((c) => c.vitaminId !== code)];
     localStorage.setItem(LOCAL_STORAGE_VITAMINS_KEY, JSON.stringify(updated));
   } catch {}
 
@@ -355,17 +436,11 @@ export async function getDriverHealthRecords(): Promise<DriverHealthRecord[]> {
       });
       return records.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
+    return [];
   } catch (e) {
-    console.warn('Firestore fallback to local health records:', e);
+    console.warn('Error fetching health records from Firestore:', e);
+    return [];
   }
-
-  try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_RECORDS_KEY);
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch {}
-  return INITIAL_DRIVER_HEALTH_RECORDS;
 }
 
 export async function createDriverHealthRecord(

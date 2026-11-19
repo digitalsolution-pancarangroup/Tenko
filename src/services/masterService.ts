@@ -12,7 +12,7 @@ import {
 import { db } from '../firebase';
 import { DriverGroup, Location, Nakes, User } from '../types';
 import { logAuditAction } from './auditService';
-import { INITIAL_DRIVER_GROUPS, INITIAL_NAKES } from './seedData';
+import { INITIAL_NAKES } from './seedData';
 import { generateLocationDocId, sanitizeCode } from '../utils/idGenerators';
 import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
@@ -54,10 +54,10 @@ export async function getDriverGroups(forceRefresh: boolean = false): Promise<Dr
           });
           return groups.sort((a, b) => a.groupName.localeCompare(b.groupName, undefined, { numeric: true, sensitivity: 'base' }));
         }
-        return INITIAL_DRIVER_GROUPS;
+        return [];
       } catch (e) {
-        console.warn('Fallback to local driver groups (Firestore quota/offline):', e);
-        return INITIAL_DRIVER_GROUPS;
+        console.warn('Error fetching driver groups from Firestore:', e);
+        return [];
       }
     },
     MASTER_CACHE_TTL_MS,
@@ -70,11 +70,43 @@ export async function createDriverGroup(
   groupData: { groupId: string; groupName: string; description?: string; status: 'ACTIVE' | 'INACTIVE' },
   currentUser: { userId: string; fullName: string }
 ): Promise<DriverGroup> {
-  const docId = groupData.groupId.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  const cleanGroupId = groupData.groupId.trim().toUpperCase();
+  const cleanGroupName = groupData.groupName.trim().toUpperCase();
+  if (!cleanGroupId || cleanGroupId === 'GRP-') {
+    throw new Error('Group ID wajib diisi dengan kode yang valid.');
+  }
+  if (!cleanGroupName) {
+    throw new Error('Group Name wajib diisi.');
+  }
+
+  const docId = cleanGroupId.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+
+  // Check Firestore & latest list to prevent overwriting existing Driver Group
+  const [existingSnap, existingGroups] = await Promise.all([
+    getDoc(doc(db, 'driverGroups', docId)),
+    getDriverGroups(true),
+  ]);
+  const duplicateById = existingGroups.find(
+    (g) =>
+      g.groupId.trim().toUpperCase() === cleanGroupId ||
+      (g.groupDocumentId && g.groupDocumentId.toLowerCase() === docId)
+  );
+  if (existingSnap.exists() || duplicateById) {
+    const foundName = duplicateById?.groupName || existingSnap.data()?.groupName || cleanGroupId;
+    throw new Error(`Group ID "${cleanGroupId}" sudah terdaftar (${foundName}). Gunakan ID lain.`);
+  }
+
+  const duplicateByName = existingGroups.find(
+    (g) => g.groupName.trim().toUpperCase() === cleanGroupName
+  );
+  if (duplicateByName) {
+    throw new Error(`Group Name "${cleanGroupName}" sudah terdaftar (${duplicateByName.groupId}).`);
+  }
+
   const newGroup: DriverGroup = {
     groupDocumentId: docId,
-    groupId: groupData.groupId.trim().toUpperCase(),
-    groupName: groupData.groupName.trim().toUpperCase(),
+    groupId: cleanGroupId,
+    groupName: cleanGroupName,
     description: groupData.description?.trim() || '',
     status: groupData.status || 'ACTIVE',
     createdAt: new Date().toISOString(),
