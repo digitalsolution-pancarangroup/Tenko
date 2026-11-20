@@ -136,7 +136,13 @@ export const UserManagementPage: React.FC = () => {
     setFormEmail(u.email);
     setFormRole(u.role);
     setFormPassword('');
-    setFormLocationId(u.locationId || '');
+    const matchedLoc = locations.find(
+      (l) =>
+        (u.locationId && l.locationId.trim().toUpperCase() === u.locationId.trim().toUpperCase()) ||
+        (u.locationName && l.locationName.trim().toLowerCase() === u.locationName.trim().toLowerCase()) ||
+        (u.locationId && l.locationDocumentId && l.locationDocumentId.trim().toUpperCase() === u.locationId.trim().toUpperCase())
+    );
+    setFormLocationId(matchedLoc ? matchedLoc.locationId : (u.locationId && !/^LOC[-_]?$/i.test(u.locationId.trim()) ? u.locationId : ''));
     setFormPhoneNumber(u.phoneNumber || '');
     setFormSipNumber(u.sipNumber || '');
     setFormStatus(u.status);

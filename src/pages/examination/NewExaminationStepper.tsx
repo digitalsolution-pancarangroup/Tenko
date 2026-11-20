@@ -4,7 +4,7 @@ import { useToast } from '../../components/common/Toast';
 import { Driver, DriverGroup, TenkoExamination, DriverPosition, Location, HealthIndication, VitaminItem, DriverHealthRecord } from '../../types';
 import { getDrivers, searchDrivers } from '../../services/driverService';
 import { getLocations } from '../../services/masterService';
-import { createTenkoExamination } from '../../services/tenkoService';
+import { createTenkoExamination, isLocationIdOrIncomplete } from '../../services/tenkoService';
 import {
   getActiveHealthRecordForDriver,
   getHealthIndications,
@@ -68,7 +68,9 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   const [filteredDrivers, setFilteredDrivers] = useState<Driver[]>([]);
   const [availableLocations, setAvailableLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>(
-    currentUser?.locationName || currentUser?.locationId || 'Pool Tanah Merdeka - Cilincing'
+    currentUser?.locationName && !isLocationIdOrIncomplete(currentUser.locationName)
+      ? currentUser.locationName
+      : 'Pool Tanah Merdeka - Cilincing'
   );
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
@@ -203,9 +205,10 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         getVitamins(),
         getPoolInventory(selectedLocation),
       ]);
+      const activeLocs = locList.filter((l) => l.status === 'ACTIVE');
       setAllDrivers(dList);
       setFilteredDrivers(dList.filter((d) => d.status === 'ACTIVE'));
-      setAvailableLocations(locList.filter((l) => l.status === 'ACTIVE'));
+      setAvailableLocations(activeLocs);
       setMasterIndications(indList.filter((i) => i.status === 'ACTIVE'));
       setMasterVitamins(vitList.filter((v) => v.status === 'ACTIVE'));
       setPoolInventoryList(initialPoolInv);
@@ -213,10 +216,24 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         setNewIndication(indList[0].name);
       }
 
-      if (!currentUser?.locationName && !currentUser?.locationId && locList.length > 0) {
-        const tanahMerdeka = locList.find((l) => l.locationName.toLowerCase().includes('tanah merdeka'));
-        if (tanahMerdeka) {
-          setSelectedLocation(tanahMerdeka.locationName);
+      if (activeLocs.length > 0) {
+        const uName = (currentUser?.locationName || '').trim().toLowerCase();
+        const uId = (currentUser?.locationId || '').trim().toUpperCase();
+        const matchedUserLoc = activeLocs.find(
+          (l) =>
+            (uName && l.locationName.trim().toLowerCase() === uName) ||
+            (uId && (l.locationId.trim().toUpperCase() === uId || (l.locationDocumentId || '').trim().toUpperCase() === uId))
+        );
+        if (matchedUserLoc) {
+          setSelectedLocation(matchedUserLoc.locationName);
+        } else {
+          const isValidCurrent = activeLocs.some(
+            (l) => l.locationName.trim().toLowerCase() === selectedLocation.trim().toLowerCase()
+          );
+          if (!isValidCurrent) {
+            const tanahMerdeka = activeLocs.find((l) => l.locationName.toLowerCase().includes('tanah merdeka'));
+            setSelectedLocation(tanahMerdeka ? tanahMerdeka.locationName : activeLocs[0].locationName);
+          }
         }
       }
 
@@ -289,6 +306,10 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   const validateCurrentStep = (): boolean => {
     setStepError('');
     if (currentStep === 1) {
+      if (!selectedLocation || isLocationIdOrIncomplete(selectedLocation)) {
+        setStepError('Silakan pilih Lokasi / Pool Pemeriksaan terlebih dahulu.');
+        return false;
+      }
       if (!examinationDate) {
         setStepError('Silakan tentukan Tanggal Pemeriksaan terlebih dahulu.');
         return false;
@@ -474,8 +495,25 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
           examinerUserId: currentUser?.userId || 'SYS_NAKES',
           examinerName: currentUser?.fullName || 'Ns. Ratna Sari, S.Kep',
           finishTime: validFinishIso,
-          locationId: selectedLocation,
-          locationNameSnapshot: selectedLocation,
+          locationId: (() => {
+            const matchedLoc = availableLocations.find(
+              (l) =>
+                l.locationName.trim().toLowerCase() === selectedLocation.trim().toLowerCase() ||
+                l.locationId.trim().toUpperCase() === selectedLocation.trim().toUpperCase()
+            );
+            return matchedLoc?.locationId || selectedLocation;
+          })(),
+          locationNameSnapshot: (() => {
+            const matchedLoc = availableLocations.find(
+              (l) =>
+                l.locationName.trim().toLowerCase() === selectedLocation.trim().toLowerCase() ||
+                l.locationId.trim().toUpperCase() === selectedLocation.trim().toUpperCase()
+            );
+            if (matchedLoc?.locationName) return matchedLoc.locationName;
+            return !isLocationIdOrIncomplete(selectedLocation)
+              ? selectedLocation
+              : availableLocations[0]?.locationName || 'Pool Tanah Merdeka - Cilincing';
+          })(),
         },
         {
           userId: currentUser?.userId || 'SYS_NAKES',
@@ -665,11 +703,21 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     <span>Lokasi / Pool Pemeriksaan TENKO</span>
                     <span className="text-rose-500">*</span>
                   </label>
-                  {currentUser?.locationName && (
-                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded truncate max-w-[180px]" title={`Pool Petugas: ${currentUser.locationName}`}>
-                      Pool Petugas: {currentUser.locationName}
-                    </span>
-                  )}
+                  {(() => {
+                    const userLocLabel =
+                      (currentUser?.locationName && !isLocationIdOrIncomplete(currentUser.locationName)
+                        ? currentUser.locationName
+                        : availableLocations.find(
+                            (l) =>
+                              currentUser?.locationId &&
+                              l.locationId.trim().toUpperCase() === currentUser.locationId.trim().toUpperCase()
+                          )?.locationName) || '';
+                    return userLocLabel ? (
+                      <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded truncate max-w-[180px]" title={`Pool Petugas: ${userLocLabel}`}>
+                        Pool Petugas: {userLocLabel}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 <select
                   id="select-examination-location"

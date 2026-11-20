@@ -308,7 +308,7 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
         const rawDriverName = getVal(['DRIVER NAME', 'NAMA DRIVER', 'NAMA LENGKAP', 'NAMA', 'DRIVER_NAME']);
         const rawPosition = getVal(['POSITION', 'POSISI', 'ROLE', 'JABATAN']);
         const rawGroup = getVal(['DRIVER GROUP', 'DRIVER_GROUP', 'GROUP', 'ARMADA', 'GRUP']);
-        const rawPool = getVal(['POOL LOKASI', 'POOL', 'LOKASI', 'LOCATION', 'CABANG']);
+        const rawPool = getVal(['LOKASI / POOL', 'LOKASI/POOL', 'POOL / LOKASI', 'POOL LOKASI', 'NAMA POOL', 'LOCATION NAME', 'SITE / POOL', 'POOL', 'LOKASI', 'LOCATION', 'SITE', 'CABANG']);
 
         // Readiness
         const rawRha = getVal(['RHA-JMP', 'RHA JMP', 'RHA']);

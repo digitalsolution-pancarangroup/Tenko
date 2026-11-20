@@ -295,6 +295,7 @@ export async function createLocation(
 
   await setDoc(doc(db, 'locations', docId), newLoc);
   invalidateCachePrefix('locations:');
+  invalidateCachePrefix('tenko:');
 
   await logAuditAction({
     action: 'CREATE',
@@ -326,6 +327,7 @@ export async function updateLocation(
 
   await updateDoc(docRef, dataToUpdate);
   invalidateCachePrefix('locations:');
+  invalidateCachePrefix('tenko:');
 
   await logAuditAction({
     action: 'UPDATE',
@@ -350,6 +352,7 @@ export async function deleteLocation(
 
   await deleteDoc(docRef);
   invalidateCachePrefix('locations:');
+  invalidateCachePrefix('tenko:');
 
   await logAuditAction({
     action: 'DELETE',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TenkoExamination, DriverGroup, Nakes, Driver, Location } from '../../types';
-import { getTenkoExaminations, deleteAllTenkoExaminations } from '../../services/tenkoService';
+import { getTenkoExaminations, deleteAllTenkoExaminations, resolveExaminationLocationName } from '../../services/tenkoService';
 import { getDriverGroups, getNakesList, getLocations } from '../../services/masterService';
 import { getDrivers } from '../../services/driverService';
 import { useAuth } from '../../context/AuthContext';
@@ -160,6 +160,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
 
   const filteredExams = useMemo(() => {
     return examinations.filter((exam) => {
+      const resolvedLocationName = resolveExaminationLocationName(exam, locationsList);
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -167,6 +168,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         (exam.driverId && exam.driverId.toLowerCase().includes(q)) ||
         (exam.driverNameSnapshot && exam.driverNameSnapshot.toLowerCase().includes(q)) ||
         (exam.driverGroupSnapshot && exam.driverGroupSnapshot.toLowerCase().includes(q)) ||
+        resolvedLocationName.toLowerCase().includes(q) ||
         (exam.locationNameSnapshot && exam.locationNameSnapshot.toLowerCase().includes(q)) ||
         (exam.locationId && exam.locationId.toLowerCase().includes(q)) ||
         (exam.securityOfficerName && exam.securityOfficerName.toLowerCase().includes(q)) ||
@@ -181,10 +183,12 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       const matchRec = filterRecommendation === 'ALL' || exam.recommendation === filterRecommendation;
       const matchSum = filterSummary === 'ALL' || exam.summary === filterSummary;
       const matchNakes = filterNakes === 'ALL' || exam.examinerName === filterNakes;
+      const filterLocNorm = filterLocation.trim().toLowerCase();
       const matchLoc =
         filterLocation === 'ALL' ||
-        (exam.locationNameSnapshot && exam.locationNameSnapshot.trim().toLowerCase() === filterLocation.trim().toLowerCase()) ||
-        (exam.locationId && exam.locationId.trim().toLowerCase() === filterLocation.trim().toLowerCase());
+        resolvedLocationName.trim().toLowerCase() === filterLocNorm ||
+        (exam.locationNameSnapshot && exam.locationNameSnapshot.trim().toLowerCase() === filterLocNorm) ||
+        (exam.locationId && exam.locationId.trim().toLowerCase() === filterLocNorm);
 
       const isExamPassed = exam.securityGateStatus === 'PASSED' || exam.securityGateStatus === 'WARNING_PASSED' || (exam.isUsed && exam.securityGateStatus !== 'REJECTED');
       const isExamHeld = exam.securityGateStatus === 'REJECTED';
@@ -209,6 +213,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     });
   }, [
     examinations,
+    locationsList,
     searchQuery,
     filterStartDate,
     filterEndDate,
@@ -280,7 +285,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       `"${(e.driverNameSnapshot || '').replace(/"/g, '""')}"`,
       `"${e.positionSnapshot || ''}"`,
       `"${(e.driverGroupSnapshot || '').replace(/"/g, '""')}"`,
-      `"${(e.locationNameSnapshot || e.locationId || 'Pool Tanah Merdeka - Cilincing').replace(/"/g, '""')}"`,
+      `"${resolveExaminationLocationName(e, locationsList).replace(/"/g, '""')}"`,
       `"${e.rhaJmp || 'READY'}"`,
       `"${e.dokJmp || 'READY'}"`,
       `"${e.dailyNonWorkingHours || '>= 11 HOURS'}"`,
@@ -311,14 +316,16 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       `"${(e.createdBy || e.examinerName || '').replace(/"/g, '""')}"`,
     ]);
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvString = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `TENKO_Report_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleDeleteAllRecords = async () => {
@@ -559,7 +566,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   {loc.locationName}
                 </option>
               ))}
-              {locationsList.every((l) => !l.locationName.includes('Tanah Merdeka')) && (
+              {locationsList.every((l) => !l.locationName.toLowerCase().includes('tanah merdeka')) && (
                 <option value="Pool Tanah Merdeka - Cilincing">Pool Tanah Merdeka - Cilincing</option>
               )}
             </select>
@@ -751,9 +758,14 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                       </span>
                     </td>
                     <td className="py-3.5 px-3.5">
-                      <span className="font-semibold text-slate-800 block truncate max-w-[170px]" title={exam.locationNameSnapshot || exam.locationId}>
-                        {exam.locationNameSnapshot || exam.locationId || 'Pool Tanah Merdeka - Cilincing'}
-                      </span>
+                      {(() => {
+                        const displayLocName = resolveExaminationLocationName(exam, locationsList);
+                        return (
+                          <span className="font-semibold text-slate-800 block truncate max-w-[170px]" title={displayLocName}>
+                            {displayLocName}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3.5 px-3.5 text-slate-700 max-w-[160px] truncate" title={exam.driverGroupSnapshot}>
                       {exam.driverGroupSnapshot}

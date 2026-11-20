@@ -101,7 +101,11 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   }, []);
 
   const currentHubLocation = useMemo(() => {
-    return currentUser?.locationName || currentUser?.locationId || 'Hub Pancaran Logistic';
+    const locName = (currentUser?.locationName || '').trim();
+    if (locName && !/^LOC[-_]?$/i.test(locName)) return locName;
+    const locId = (currentUser?.locationId || '').trim();
+    if (locId && !/^LOC[-_]?$/i.test(locId)) return locId;
+    return 'Hub Pancaran Logistic';
   }, [currentUser]);
 
   useEffect(() => {

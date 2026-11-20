@@ -11,13 +11,149 @@ import {
   orderBy,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import { DriverPosition, ExaminationRecommendation, ExaminationSummary, NonWorkingHoursOption, PhysicalObservationStatus, ReadinessStatus, ScreeningResult, TenkoExamination } from '../types';
+import { DriverPosition, ExaminationRecommendation, ExaminationSummary, Location, NonWorkingHoursOption, PhysicalObservationStatus, ReadinessStatus, ScreeningResult, TenkoExamination, User } from '../types';
 import { logAuditAction } from './auditService';
 import { getDrivers, getDriverByCustomId, updateDriver } from './driverService';
+import { getLocations } from './masterService';
+import { getUsers } from './userService';
 import { generateTenkoExaminationId, generateDriverDocId } from '../utils/idGenerators';
 import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
 const TENKO_CACHE_TTL_MS = 90_000; // 90 seconds
+
+export function isLocationIdOrIncomplete(val?: string | null): boolean {
+  const trimmed = (val || '').trim();
+  if (!trimmed) return true;
+  if (/^LOC[-_]?$/i.test(trimmed)) return true;
+  if (/^LOC[-_][A-Z0-9_-]+$/i.test(trimmed)) return true;
+  return false;
+}
+
+function buildLocationLookupMaps(locations: Location[]) {
+  const byIdUpper = new Map<string, string>();
+  const byNameLower = new Map<string, string>();
+  const idByNameLower = new Map<string, string>();
+
+  locations.forEach((loc) => {
+    const locName = (loc.locationName || '').trim();
+    const locId = (loc.locationId || '').trim();
+    const locDocId = (loc.locationDocumentId || '').trim();
+
+    if (locName && !isLocationIdOrIncomplete(locName)) {
+      byNameLower.set(locName.toLowerCase(), locName);
+      if (locId) idByNameLower.set(locName.toLowerCase(), locId);
+      if (locId) byIdUpper.set(locId.toUpperCase(), locName);
+      if (locDocId) byIdUpper.set(locDocId.toUpperCase(), locName);
+    }
+  });
+
+  return { byIdUpper, byNameLower, idByNameLower };
+}
+
+function getDefaultPoolName(locations: Location[]): string {
+  const active = locations.filter((l) => l.status === 'ACTIVE' && l.locationName && !isLocationIdOrIncomplete(l.locationName));
+  const poolList = active.length > 0 ? active : locations.filter((l) => l.locationName && !isLocationIdOrIncomplete(l.locationName));
+  const tanahMerdeka = poolList.find((l) => l.locationName.toLowerCase().includes('tanah merdeka'));
+  if (tanahMerdeka) return tanahMerdeka.locationName;
+  if (poolList.length > 0) return poolList[0].locationName;
+  return 'Pool Tanah Merdeka - Cilincing';
+}
+
+export function resolveExaminationLocationName(
+  exam: Pick<TenkoExamination, 'locationNameSnapshot' | 'locationId' | 'examinerUserId' | 'examinerName' | 'securityLocationName'>,
+  locations: Location[],
+  users?: User[]
+): string {
+  const { byIdUpper, byNameLower } = buildLocationLookupMaps(locations);
+  const snap = (exam.locationNameSnapshot || '').trim();
+  const id = (exam.locationId || '').trim();
+
+  if (snap) {
+    const fromId = byIdUpper.get(snap.toUpperCase());
+    if (fromId) return fromId;
+    const fromName = byNameLower.get(snap.toLowerCase());
+    if (fromName) return fromName;
+    if (!isLocationIdOrIncomplete(snap)) return snap;
+  }
+
+  if (id) {
+    const fromId = byIdUpper.get(id.toUpperCase());
+    if (fromId) return fromId;
+    const fromName = byNameLower.get(id.toLowerCase());
+    if (fromName) return fromName;
+    if (!isLocationIdOrIncomplete(id)) return id;
+  }
+
+  if (users && users.length > 0) {
+    const exUid = (exam.examinerUserId || '').trim();
+    const exName = (exam.examinerName || '').trim().toLowerCase();
+    const matchedUser = users.find(
+      (u) =>
+        (exUid && (u.userId === exUid || u.authUid === exUid)) ||
+        (exName && u.fullName && u.fullName.trim().toLowerCase() === exName)
+    );
+    if (matchedUser) {
+      const uName = (matchedUser.locationName || '').trim();
+      const uId = (matchedUser.locationId || '').trim();
+      if (uName) {
+        const mapped = byNameLower.get(uName.toLowerCase()) || byIdUpper.get(uName.toUpperCase());
+        if (mapped) return mapped;
+        if (!isLocationIdOrIncomplete(uName)) return uName;
+      }
+      if (uId) {
+        const mapped = byIdUpper.get(uId.toUpperCase()) || byNameLower.get(uId.toLowerCase());
+        if (mapped) return mapped;
+        if (!isLocationIdOrIncomplete(uId)) return uId;
+      }
+    }
+  }
+
+  const secLoc = (exam.securityLocationName || '').trim();
+  if (secLoc && secLoc.toLowerCase() !== 'gate utama') {
+    const mapped = byNameLower.get(secLoc.toLowerCase()) || byIdUpper.get(secLoc.toUpperCase());
+    if (mapped) return mapped;
+  }
+
+  return getDefaultPoolName(locations);
+}
+
+async function enrichExaminationsLocations(
+  list: TenkoExamination[],
+  forceRefresh: boolean = false
+): Promise<TenkoExamination[]> {
+  if (list.length === 0) return list;
+
+  const locations = await getLocations(forceRefresh).catch(() => [] as Location[]);
+  const { byIdUpper, byNameLower, idByNameLower } = buildLocationLookupMaps(locations);
+
+  const hasDirectResolution = (exam: TenkoExamination): boolean => {
+    const snap = (exam.locationNameSnapshot || '').trim();
+    const id = (exam.locationId || '').trim();
+    if (snap && (byIdUpper.has(snap.toUpperCase()) || byNameLower.has(snap.toLowerCase()) || !isLocationIdOrIncomplete(snap))) {
+      return true;
+    }
+    if (id && (byIdUpper.has(id.toUpperCase()) || byNameLower.has(id.toLowerCase()) || !isLocationIdOrIncomplete(id))) {
+      return true;
+    }
+    return false;
+  };
+
+  const needsUsers = list.some((exam) => !hasDirectResolution(exam));
+  const users = needsUsers ? await getUsers().catch(() => [] as User[]) : undefined;
+
+  return list.map((exam) => {
+    const resolvedName = resolveExaminationLocationName(exam, locations, users);
+    const resolvedId = idByNameLower.get(resolvedName.toLowerCase()) || exam.locationId || resolvedName;
+    if (exam.locationNameSnapshot === resolvedName && exam.locationId === resolvedId) {
+      return exam;
+    }
+    return {
+      ...exam,
+      locationNameSnapshot: resolvedName,
+      locationId: isLocationIdOrIncomplete(exam.locationId) ? resolvedId : exam.locationId,
+    };
+  });
+}
 
 export interface TenkoImportRow {
   examinationDate: string; // YYYY-MM-DD
@@ -174,7 +310,8 @@ export async function getTenkoExaminations(
         }) as TenkoExamination);
 
         list.sort(compareExaminationsByExamDateDesc);
-        return mergeGateLogsIntoExams(list, gateLogsSnap);
+        const withGateLogs = mergeGateLogsIntoExams(list, gateLogsSnap);
+        return await enrichExaminationsLocations(withGateLogs, forceRefresh);
       } catch (_error) {
         try {
           const [snap, gateLogsSnap] = await Promise.all([
@@ -189,8 +326,8 @@ export async function getTenkoExaminations(
           }) as TenkoExamination);
 
           const sorted = list.sort(compareExaminationsByExamDateDesc);
-
-          return mergeGateLogsIntoExams(sorted, gateLogsSnap);
+          const withGateLogs = mergeGateLogsIntoExams(sorted, gateLogsSnap);
+          return await enrichExaminationsLocations(withGateLogs, forceRefresh);
         } catch (fallbackErr) {
           console.warn('Fallback to empty tenko examination list (Firestore quota/offline):', fallbackErr);
           return [];
@@ -224,10 +361,13 @@ export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamina
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
-      return {
-        ...data,
-        tenkoDocumentId: snap.id,
-      } as TenkoExamination;
+      const [enriched] = await enrichExaminationsLocations([
+        {
+          ...data,
+          tenkoDocumentId: snap.id,
+        } as TenkoExamination,
+      ]);
+      return enriched;
     }
 
     // 2. Query by tenkoId
@@ -236,10 +376,13 @@ export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamina
     if (!querySnap.empty) {
       const bestDoc = querySnap.docs[0];
       const data = bestDoc.data();
-      return {
-        ...data,
-        tenkoDocumentId: bestDoc.id,
-      } as TenkoExamination;
+      const [enriched] = await enrichExaminationsLocations([
+        {
+          ...data,
+          tenkoDocumentId: bestDoc.id,
+        } as TenkoExamination,
+      ]);
+      return enriched;
     }
 
     // 2b. Query by driverId directly (avoids full collection scan when scanning driver NIK)
@@ -251,7 +394,8 @@ export async function getTenkoById(tenkoIdOrDocId: string): Promise<TenkoExamina
         tenkoDocumentId: d.id,
       }) as TenkoExamination);
       driverDocs.sort(compareExaminationsByExamDateDesc);
-      return driverDocs[0];
+      const [enriched] = await enrichExaminationsLocations([driverDocs[0]]);
+      return enriched;
     }
 
     // 3. Fallback: Search cached examinations sorted newest examinationDate first
@@ -404,8 +548,19 @@ export async function createTenkoExamination(
   const tenkoId = docId;
 
   const bpResult = `${examData.bloodPressureSystolic}/${examData.bloodPressureDiastolic} mmHg`;
-  const locSnapshot = examData.locationNameSnapshot || examData.locationId || 'Pool Tanah Merdeka - Cilincing';
-  const locId = examData.locationId || locSnapshot;
+  const locations = await getLocations().catch(() => [] as Location[]);
+  const { idByNameLower } = buildLocationLookupMaps(locations);
+  const locSnapshot = resolveExaminationLocationName(
+    {
+      locationNameSnapshot: examData.locationNameSnapshot,
+      locationId: examData.locationId,
+      examinerUserId: currentUser.userId,
+      examinerName: currentUser.fullName,
+    },
+    locations
+  );
+  const resolvedLocId = idByNameLower.get(locSnapshot.toLowerCase());
+  const locId = resolvedLocId || (!isLocationIdOrIncomplete(examData.locationId) ? examData.locationId! : locSnapshot);
 
   const newExamination: TenkoExamination = {
     ...examData,
@@ -474,7 +629,11 @@ export async function importTenkoBatch(
   if (rows.length === 0) return result;
 
   try {
-    const existingDrivers = await getDrivers();
+    const [existingDrivers, existingLocations] = await Promise.all([
+      getDrivers(),
+      getLocations().catch(() => [] as Location[]),
+    ]);
+    const { idByNameLower } = buildLocationLookupMaps(existingLocations);
     const driverMap = new Map<string, { name: string; group: string; pos: DriverPosition }>();
     existingDrivers.forEach((d) => {
       if (d.driverId) {
@@ -600,8 +759,17 @@ export async function importTenkoBatch(
           note: row.note || 'Imported via Batch Excel',
           examinerUserId: currentUser.userId,
           examinerName: row.examinerName || currentUser.fullName,
-          locationId: row.locationId || row.locationName || 'Pool Tanah Merdeka - Cilincing',
-          locationNameSnapshot: row.locationName || row.locationId || 'Pool Tanah Merdeka - Cilincing',
+          locationId: (() => {
+            const resolvedName = resolveExaminationLocationName(
+              { locationNameSnapshot: row.locationName, locationId: row.locationId, examinerUserId: currentUser.userId, examinerName: row.examinerName || currentUser.fullName },
+              existingLocations
+            );
+            return idByNameLower.get(resolvedName.toLowerCase()) || row.locationId || resolvedName;
+          })(),
+          locationNameSnapshot: resolveExaminationLocationName(
+            { locationNameSnapshot: row.locationName, locationId: row.locationId, examinerUserId: currentUser.userId, examinerName: row.examinerName || currentUser.fullName },
+            existingLocations
+          ),
           finishTime: row.finishTime || `${row.examinationDate || now.toISOString().split('T')[0]}T08:00:00.000Z`,
           createdAt: now.toISOString(),
           createdBy: currentUser.fullName || 'Import TENKO',
