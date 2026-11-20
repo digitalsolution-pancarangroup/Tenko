@@ -80,8 +80,16 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  // Form State: STEP 1 - Driver & Examination Date
+  const getLocalNowTime = (): string => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const min = String(now.getMinutes()).padStart(2, '0');
+    return `${hh}:${min}`;
+  };
+
+  // Form State: STEP 1 - Driver & Examination Date/Time
   const [examinationDate, setExaminationDate] = useState<string>(() => getLocalTodayDate());
+  const [examinationTime, setExaminationTime] = useState<string>(() => getLocalNowTime());
   const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
   const [driverPhoneNumber, setDriverPhoneNumber] = useState<string>('');
 
@@ -118,18 +126,35 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
   const [summary, setSummary] = useState<'PASSED' | 'FAILED' | null>(null);
   const [recommendation, setRecommendation] = useState<'FIT TO WORK' | 'FIT TO WORK WITH NOTE' | 'UNFIT TO WORK' | ''>('');
   const [note, setNote] = useState<string>('');
-  const [finishTime, setFinishTime] = useState<string>(() => {
-    const now = new Date();
-    // format as YYYY-MM-DDTHH:mm
-    const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
-    return localIso;
-  });
+  const [finishTime, setFinishTime] = useState<string>(() => `${getLocalTodayDate()}T${getLocalNowTime()}`);
 
   const handleExaminationDateChange = (newDate: string) => {
     setExaminationDate(newDate);
     if (/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
-      const timePart = finishTime && finishTime.length >= 16 ? finishTime.slice(11, 16) : '08:00';
+      const timePart = /^\d{2}:\d{2}$/.test(examinationTime)
+        ? examinationTime
+        : finishTime && finishTime.length >= 16
+        ? finishTime.slice(11, 16)
+        : '08:00';
       setFinishTime(`${newDate}T${timePart}`);
+    }
+  };
+
+  const handleExaminationTimeChange = (newTime: string) => {
+    setExaminationTime(newTime);
+    if (/^\d{2}:\d{2}$/.test(newTime)) {
+      const datePart = /^\d{4}-\d{2}-\d{2}$/.test(examinationDate)
+        ? examinationDate
+        : getLocalTodayDate();
+      setFinishTime(`${datePart}T${newTime}`);
+    }
+  };
+
+  const handleFinishTimeChange = (newDateTime: string) => {
+    setFinishTime(newDateTime);
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(newDateTime)) {
+      setExaminationDate(newDateTime.slice(0, 10));
+      setExaminationTime(newDateTime.slice(11, 16));
     }
   };
 
@@ -268,6 +293,10 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         setStepError('Silakan tentukan Tanggal Pemeriksaan terlebih dahulu.');
         return false;
       }
+      if (!examinationTime || !/^\d{2}:\d{2}$/.test(examinationTime)) {
+        setStepError('Silakan tentukan Waktu Pemeriksaan terlebih dahulu.');
+        return false;
+      }
       if (!selectedDriver) {
         setStepError('Silakan cari dan pilih Driver / Kenek terlebih dahulu.');
         return false;
@@ -404,10 +433,11 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
     setLoading(true);
     try {
       const examDate = examinationDate || getLocalTodayDate();
-      const parsedFinish = finishTime ? new Date(finishTime) : new Date(`${examDate}T08:00:00`);
+      const examTime = /^\d{2}:\d{2}$/.test(examinationTime) ? examinationTime : '08:00';
+      const parsedFinish = finishTime ? new Date(finishTime) : new Date(`${examDate}T${examTime}:00`);
       const validFinishIso = Number.isFinite(parsedFinish.getTime())
         ? parsedFinish.toISOString()
-        : new Date(`${examDate}T08:00:00`).toISOString();
+        : new Date(`${examDate}T${examTime}:00`).toISOString();
       const cleanPhone = driverPhoneNumber.trim() || selectedDriver.phoneNumber || '';
       const created = await createTenkoExamination(
         {
@@ -673,39 +703,62 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                 <div className="flex items-center justify-between gap-2">
                   <label htmlFor="input-examination-date" className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-blue-600 shrink-0" />
-                    <span>Tanggal Pemeriksaan</span>
+                    <span>Tanggal &amp; Waktu Pemeriksaan</span>
                     <span className="text-rose-500">*</span>
                   </label>
                   {isBackdateExam ? (
-                    <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded shrink-0">
                       Mode Backdate
                     </span>
                   ) : isFutureDateExam ? (
-                    <span className="text-[10px] font-extrabold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-extrabold text-indigo-800 bg-indigo-100 border border-indigo-300 px-2 py-0.5 rounded shrink-0">
                       Tanggal Masa Depan
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded">
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded shrink-0">
                       Hari Ini
                     </span>
                   )}
                 </div>
-                <input
-                  id="input-examination-date"
-                  type="date"
-                  value={examinationDate}
-                  onChange={(e) => handleExaminationDateChange(e.target.value)}
-                  className={`w-full px-4 py-2.5 rounded-xl border font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 ${
-                    isBackdateExam
-                      ? 'border-amber-400 text-amber-900'
-                      : isFutureDateExam
-                      ? 'border-indigo-400 text-indigo-900'
-                      : 'border-slate-300 text-slate-900'
-                  }`}
-                  required
-                />
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                  <div className="sm:col-span-3">
+                    <input
+                      id="input-examination-date"
+                      type="date"
+                      aria-label="Tanggal Pemeriksaan"
+                      value={examinationDate}
+                      onChange={(e) => handleExaminationDateChange(e.target.value)}
+                      className={`w-full px-3.5 py-2.5 rounded-xl border font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 ${
+                        isBackdateExam
+                          ? 'border-amber-400 text-amber-900'
+                          : isFutureDateExam
+                          ? 'border-indigo-400 text-indigo-900'
+                          : 'border-slate-300 text-slate-900'
+                      }`}
+                      required
+                    />
+                  </div>
+                  <div className="sm:col-span-2 relative">
+                    <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      id="input-examination-time"
+                      type="time"
+                      aria-label="Waktu Pemeriksaan"
+                      value={examinationTime}
+                      onChange={(e) => handleExaminationTimeChange(e.target.value)}
+                      className={`w-full pl-9 pr-3 py-2.5 rounded-xl border font-bold text-xs md:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 ${
+                        isBackdateExam
+                          ? 'border-amber-400 text-amber-900'
+                          : isFutureDateExam
+                          ? 'border-indigo-400 text-indigo-900'
+                          : 'border-slate-300 text-slate-900'
+                      }`}
+                      required
+                    />
+                  </div>
+                </div>
                 <p className="text-[11px] text-slate-500">
-                  Otomatis tanggal hari ini; dapat diubah bila ada pencatatan data susulan (backdate).
+                  Otomatis tanggal &amp; waktu saat ini (WIB); dapat diubah bila ada pencatatan data susulan (backdate).
                 </p>
               </div>
             </div>
@@ -1795,20 +1848,20 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               />
             </div>
 
-            {/* Field 31: Finish Time (Waktu Selesai - Editable) */}
+            {/* Field 31: Finish Time (Waktu Selesai - Editable & Synced with Step 1) */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1">
                   Waktu Selesai Pemeriksaan (Finish Time) <span className="text-rose-500">*</span>
                 </label>
-                <p className="text-xs text-slate-500">Dapat disesuaikan jika pencatatan dilakukan pasca pemeriksaan fisik.</p>
+                <p className="text-xs text-slate-500">Tersinkron dengan tanggal &amp; waktu pemeriksaan Langkah 1; dapat disesuaikan sebelum disimpan.</p>
               </div>
 
               <input
                 id="input-finish-time"
                 type="datetime-local"
                 value={finishTime}
-                onChange={(e) => setFinishTime(e.target.value)}
+                onChange={(e) => handleFinishTimeChange(e.target.value)}
                 className="px-4 py-2.5 rounded-xl border border-slate-300 bg-white font-mono text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600"
                 required
               />
@@ -2061,7 +2114,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
             {/* Summary Highlights */}
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2.5">
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Tanggal Pemeriksaan:</span>
+                <span className="text-slate-500">Tanggal &amp; Waktu Periksa:</span>
                 <div className="flex items-center gap-2">
                   {isBackdateExam && (
                     <span className="text-[10px] font-extrabold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
@@ -2074,7 +2127,10 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                     </span>
                   )}
                   <span className="font-mono font-bold text-slate-900">
-                    {examinationDate} {finishTime ? `• ${finishTime.slice(11, 16)} WIB` : ''}
+                    {examinationDate}
+                    {(examinationTime || (finishTime && finishTime.length >= 16))
+                      ? ` • ${examinationTime || finishTime.slice(11, 16)} WIB`
+                      : ''}
                   </span>
                 </div>
               </div>
