@@ -29,7 +29,10 @@ export async function getDrivers(forceRefresh: boolean = false): Promise<Driver[
         const snap = await getDocs(q);
         fetchedFromServer = true;
         if (!snap.empty) {
-          return snap.docs.map((d) => d.data() as Driver);
+          return snap.docs.map((d) => ({
+            ...d.data(),
+            driverDocumentId: d.id,
+          }) as Driver);
         }
         return INITIAL_DRIVERS;
       } catch (error) {
@@ -37,7 +40,10 @@ export async function getDrivers(forceRefresh: boolean = false): Promise<Driver[
           const snap = await getDocs(collection(db, 'drivers'));
           fetchedFromServer = true;
           if (!snap.empty) {
-            return snap.docs.map((d) => d.data() as Driver);
+            return snap.docs.map((d) => ({
+              ...d.data(),
+              driverDocumentId: d.id,
+            }) as Driver);
           }
           return INITIAL_DRIVERS;
         } catch (e) {
@@ -59,12 +65,18 @@ export async function getDriverByCustomId(driverId: string): Promise<Driver | nu
   try {
     const directSnap = await getDoc(doc(db, 'drivers', structuredDocId));
     if (directSnap.exists()) {
-      return directSnap.data() as Driver;
+      return {
+        ...directSnap.data(),
+        driverDocumentId: directSnap.id,
+      } as Driver;
     }
     const q = query(collection(db, 'drivers'), where('driverId', '==', driverId.trim()));
     const snap = await getDocs(q);
     if (!snap.empty) {
-      return snap.docs[0].data() as Driver;
+      return {
+        ...snap.docs[0].data(),
+        driverDocumentId: snap.docs[0].id,
+      } as Driver;
     }
   } catch (e) {
     console.warn('Fallback to local driver search (Firestore quota/offline):', e);
@@ -189,6 +201,53 @@ export async function deleteDriver(
     userId: currentUser.userId,
     userName: currentUser.fullName,
   });
+}
+
+export async function deleteSelectedDrivers(
+  docIds: string[],
+  currentUser: { userId: string; fullName: string }
+): Promise<number> {
+  const uniqueDocIds = Array.from(
+    new Set(docIds.map((id) => (id || '').trim()).filter(Boolean))
+  );
+  if (uniqueDocIds.length === 0) return 0;
+
+  try {
+    const CHUNK_SIZE = 200;
+    for (let i = 0; i < uniqueDocIds.length; i += CHUNK_SIZE) {
+      const chunk = uniqueDocIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((docId) => {
+        batch.delete(doc(db, 'drivers', docId));
+      });
+      await batch.commit();
+    }
+
+    invalidateCachePrefix('drivers:');
+
+    await logAuditAction({
+      module: 'Master Driver/Kenek',
+      recordId: `DEL-BATCH-${Date.now()}`,
+      action: 'DELETE_SELECTED_DRIVERS',
+      newValue: {
+        deletedCount: uniqueDocIds.length,
+        sampleDocIds: uniqueDocIds.slice(0, 20),
+      },
+      userId: currentUser.userId,
+      userName: currentUser.fullName,
+    });
+
+    return uniqueDocIds.length;
+  } catch (err: any) {
+    console.error('Failed to delete selected drivers:', err);
+    if (
+      err?.code === 'permission-denied' ||
+      String(err?.message || '').toLowerCase().includes('permission')
+    ) {
+      throw new Error('Akses ditolak: hanya Super Admin yang diizinkan menghapus data driver/kenek.');
+    }
+    throw err;
+  }
 }
 
 export async function deleteAllDrivers(

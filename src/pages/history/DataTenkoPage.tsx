@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { TenkoExamination, DriverGroup, Nakes, Driver, Location } from '../../types';
-import { getTenkoExaminations, deleteAllTenkoExaminations, resolveExaminationLocationName } from '../../services/tenkoService';
+import { getTenkoExaminations, deleteSelectedTenkoExaminations, resolveExaminationLocationName } from '../../services/tenkoService';
 import { getDriverGroups, getNakesList, getLocations } from '../../services/masterService';
 import { getDrivers } from '../../services/driverService';
 import { useAuth } from '../../context/AuthContext';
@@ -57,11 +57,14 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const canDeleteRecords = currentUser?.role === 'SUPER_ADMIN';
 
   // Close action menu when clicking outside
   useEffect(() => {
@@ -234,6 +237,98 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     return filteredExams.slice(start, start + pageSize);
   }, [filteredExams, currentPage, pageSize]);
 
+  // Clamp currentPage when dataset shrinks (e.g. after deletion)
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  // Reset selection automatically whenever active filters/search change so off-filter records are never deleted accidentally
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [
+    searchQuery,
+    filterStartDate,
+    filterEndDate,
+    filterPosition,
+    filterGroup,
+    filterRecommendation,
+    filterSummary,
+    filterNakes,
+    filterLocation,
+    filterSecurityStatus,
+  ]);
+
+  const getExamRowId = (exam: TenkoExamination): string => exam.tenkoDocumentId || exam.tenkoId;
+
+  const filteredIds = useMemo(
+    () => filteredExams.map(getExamRowId).filter(Boolean),
+    [filteredExams]
+  );
+
+  const paginatedIds = useMemo(
+    () => paginatedExams.map(getExamRowId).filter(Boolean),
+    [paginatedExams]
+  );
+
+  const selectedCount = selectedIds.size;
+
+  const isPageAllSelected = useMemo(
+    () => paginatedIds.length > 0 && paginatedIds.every((id) => selectedIds.has(id)),
+    [paginatedIds, selectedIds]
+  );
+
+  const isPagePartiallySelected = useMemo(
+    () => paginatedIds.some((id) => selectedIds.has(id)) && !isPageAllSelected,
+    [paginatedIds, selectedIds, isPageAllSelected]
+  );
+
+  const isAllFilteredSelected = useMemo(
+    () => filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id)),
+    [filteredIds, selectedIds]
+  );
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isPagePartiallySelected;
+    }
+  }, [isPagePartiallySelected]);
+
+  const toggleSelectOne = (rowId: string) => {
+    if (!rowId) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectPage = () => {
+    if (paginatedIds.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isPageAllSelected) {
+        paginatedIds.forEach((id) => next.delete(id));
+      } else {
+        paginatedIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedIds(new Set(filteredIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
   // Export to CSV (Full 35 columns matching schema)
   const handleExportCSV = () => {
     if (filteredExams.length === 0) return;
@@ -328,13 +423,21 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     URL.revokeObjectURL(url);
   };
 
-  const handleDeleteAllRecords = async () => {
+  const handleDeleteSelectedRecords = async () => {
+    if (selectedIds.size === 0) {
+      showToast('Pilih minimal 1 data terlebih dahulu untuk dihapus.', 'error');
+      setIsDeleteModalOpen(false);
+      return;
+    }
+
     setIsDeleting(true);
     try {
-      const count = await deleteAllTenkoExaminations(
+      const count = await deleteSelectedTenkoExaminations(
+        Array.from(selectedIds),
         currentUser ? { userId: currentUser.userId, fullName: currentUser.fullName } : undefined
       );
-      showToast(`Berhasil menghapus ${count} data pemeriksaan TENKO. Database siap menerima data real.`, 'success');
+      showToast(`Berhasil menghapus ${count} data pemeriksaan TENKO terpilih.`, 'success');
+      setSelectedIds(new Set());
       setIsDeleteModalOpen(false);
       await loadData(true, true);
     } catch (err: any) {
@@ -460,24 +563,33 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   </div>
                 </button>
 
-                {/* 3. Delete All (if any records) */}
-                {examinations.length > 0 && (
+                {/* 3. Delete Selected Data (Super Admin only) */}
+                {canDeleteRecords && examinations.length > 0 && (
                   <>
                     <div className="my-1 border-t border-slate-100" />
                     <button
-                      id="menu-item-delete-all"
+                      id="menu-item-delete-selected"
+                      type="button"
                       onClick={() => {
+                        if (selectedCount === 0) return;
                         setIsActionMenuOpen(false);
                         setIsDeleteModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-rose-50 text-left transition cursor-pointer group"
+                      disabled={selectedCount === 0}
+                      className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-rose-50 text-left transition cursor-pointer group disabled:opacity-55 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                     >
-                      <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white transition">
+                      <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 group-hover:bg-rose-600 group-hover:text-white group-disabled:group-hover:bg-rose-100 group-disabled:group-hover:text-rose-600 transition">
                         <Trash2 className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-xs font-bold text-rose-700">Hapus Semua Data</p>
-                        <p className="text-[10px] text-rose-400">Kosongkan database rekam medis</p>
+                        <p className="text-xs font-bold text-rose-700">
+                          {selectedCount > 0 ? `Hapus Data (${selectedCount} dipilih)` : 'Hapus Data'}
+                        </p>
+                        <p className="text-[10px] text-rose-400">
+                          {selectedCount > 0
+                            ? 'Hapus permanen data yang dicentang'
+                            : 'Centang data di tabel terlebih dahulu'}
+                        </p>
                       </div>
                     </button>
                   </>
@@ -704,6 +816,56 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </div>
         </div>
 
+        {/* Selection Toolbar & Cross-Page Filter Select Banner */}
+        {canDeleteRecords && selectedCount > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-blue-50/90 border border-blue-200 text-xs animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-2 text-blue-950">
+              <span className="font-extrabold px-2.5 py-0.5 rounded-lg bg-blue-600 text-white">
+                {selectedCount} dipilih
+              </span>
+              {isPageAllSelected && filteredExams.length > paginatedExams.length && !isAllFilteredSelected && (
+                <>
+                  <span className="text-slate-600">
+                    ({paginatedExams.length} data di halaman ini dipilih)
+                  </span>
+                  <button
+                    type="button"
+                    id="btn-select-all-filtered-tenko"
+                    onClick={handleSelectAllFiltered}
+                    className="font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                  >
+                    Pilih semua {filteredExams.length} data hasil filter
+                  </button>
+                </>
+              )}
+              {isAllFilteredSelected && filteredExams.length > paginatedExams.length && (
+                <span className="text-blue-800 font-semibold">
+                  Semua {filteredExams.length} data hasil filter telah dipilih.
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Batal Pilih
+              </button>
+              <button
+                type="button"
+                id="btn-bulk-delete-tenko"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Data ({selectedCount})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div className="py-12 text-center text-slate-400 text-xs">Memuat data riwayat TENKO...</div>
         ) : filteredExams.length === 0 ? (
@@ -717,7 +879,21 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
             <table className="w-full min-w-[1200px] text-left text-xs border-collapse">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/50 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-3.5 pl-4 min-w-[160px]">ID TENKO</th>
+                  {canDeleteRecords && (
+                    <th className="py-3 px-3 pl-4 w-10">
+                      <input
+                        ref={headerCheckboxRef}
+                        id="checkbox-select-all-page-tenko"
+                        type="checkbox"
+                        checked={isPageAllSelected}
+                        onChange={toggleSelectPage}
+                        aria-label="Pilih semua data di halaman ini"
+                        title="Pilih semua data di halaman ini"
+                        className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                      />
+                    </th>
+                  )}
+                  <th className={`py-3 px-3.5 ${canDeleteRecords ? '' : 'pl-4'} min-w-[160px]`}>ID TENKO</th>
                   <th className="py-3 px-3.5 min-w-[140px]">Tanggal Pemeriksaan</th>
                   <th className="py-3 px-3.5 min-w-[180px]">Driver / Kenek</th>
                   <th className="py-3 px-3.5 min-w-[100px]">Posisi</th>
@@ -733,9 +909,27 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {paginatedExams.map((exam) => {
+                  const rowId = getExamRowId(exam);
+                  const isSelected = selectedIds.has(rowId);
                   return (
-                  <tr key={exam.tenkoDocumentId || exam.tenkoId} className="hover:bg-blue-50/40 transition">
-                    <td className="py-3.5 px-3.5 pl-4 font-mono font-bold text-blue-900 whitespace-nowrap">{exam.tenkoId}</td>
+                  <tr
+                    key={rowId}
+                    className={`transition ${
+                      isSelected ? 'bg-blue-50/70 hover:bg-blue-50' : 'hover:bg-blue-50/40'
+                    }`}
+                  >
+                    {canDeleteRecords && (
+                      <td className="py-3.5 px-3 pl-4 w-10">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(rowId)}
+                          aria-label={`Pilih pemeriksaan ${exam.tenkoId}`}
+                          className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        />
+                      </td>
+                    )}
+                    <td className={`py-3.5 px-3.5 ${canDeleteRecords ? '' : 'pl-4'} font-mono font-bold text-blue-900 whitespace-nowrap`}>{exam.tenkoId}</td>
                     <td className="py-3.5 px-3.5 text-slate-600 whitespace-nowrap">
                       <span className="font-semibold text-slate-900 block">{exam.examinationDate || '-'}</span>
                       <span className="text-[11px] text-slate-400 font-mono block mt-0.5">
@@ -909,8 +1103,8 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
         existingGroups={driverGroups}
       />
 
-      {/* Delete All Confirmation Modal */}
-      {isDeleteModalOpen && (
+      {/* Delete Selected Confirmation Modal */}
+      {isDeleteModalOpen && selectedCount > 0 && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
             <div className="p-6 text-center space-y-4">
@@ -918,12 +1112,16 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                 <Trash2 className="w-7 h-7" />
               </div>
               <div>
-                <h3 className="text-lg font-black text-slate-900">Hapus Semua Data TENKO?</h3>
+                <h3 className="text-lg font-black text-slate-900">Hapus {selectedCount} Data TENKO?</h3>
                 <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                  Tindakan ini akan <strong>menghapus permanen seluruh {examinations.length} data riwayat pemeriksaan TENKO</strong> dari database Firestore agar Anda dapat mengunggah file Excel berisi data real.
+                  Tindakan ini akan{' '}
+                  <strong>
+                    menghapus permanen {selectedCount === examinations.length ? `seluruh ${selectedCount}` : selectedCount} data pemeriksaan TENKO yang dipilih
+                  </strong>{' '}
+                  dari database Firestore.
                 </p>
                 <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl mt-3 border border-amber-200 text-left">
-                  ⚠️ <strong>Catatan:</strong> Data Master Driver, Master Lokasi, dan Master Nakes <strong>tidak akan terhapus</strong>.
+                  ⚠️ <strong>Catatan:</strong> Data yang dihapus tidak dapat dipulihkan. Data Master Driver, Master Lokasi, dan Master Nakes <strong>tidak akan terhapus</strong>.
                 </p>
               </div>
 
@@ -938,7 +1136,8 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={handleDeleteAllRecords}
+                  id="btn-confirm-delete-selected-tenko"
+                  onClick={handleDeleteSelectedRecords}
                   disabled={isDeleting}
                   className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
@@ -947,7 +1146,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   ) : (
                     <>
                       <Trash2 className="w-4 h-4" />
-                      <span>Ya, Hapus Semua</span>
+                      <span>Ya, Hapus ({selectedCount} Data)</span>
                     </>
                   )}
                 </button>

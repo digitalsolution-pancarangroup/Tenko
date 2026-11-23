@@ -305,8 +305,8 @@ export async function getTenkoExaminations(
         fetchedFromServer = true;
 
         const list = snap.docs.map((d) => ({
-          tenkoDocumentId: d.id,
           ...d.data(),
+          tenkoDocumentId: d.id,
         }) as TenkoExamination);
 
         list.sort(compareExaminationsByExamDateDesc);
@@ -805,6 +805,52 @@ export async function importTenkoBatch(
   } catch (err: any) {
     console.error('Batch import TENKO error:', err);
     result.errors.push(err.message || 'Gagal menyimpan data pemeriksaan ke database.');
+    throw err;
+  }
+}
+
+export async function deleteSelectedTenkoExaminations(
+  docIds: string[],
+  currentUser?: { userId: string; fullName: string }
+): Promise<number> {
+  const uniqueDocIds = Array.from(
+    new Set(docIds.map((id) => (id || '').trim()).filter(Boolean))
+  );
+  if (uniqueDocIds.length === 0) return 0;
+
+  try {
+    const CHUNK_SIZE = 200;
+    for (let i = 0; i < uniqueDocIds.length; i += CHUNK_SIZE) {
+      const chunk = uniqueDocIds.slice(i, i + CHUNK_SIZE);
+      const batch = writeBatch(db);
+      chunk.forEach((docId) => {
+        batch.delete(doc(db, 'tenkoExaminations', docId));
+      });
+      await batch.commit();
+    }
+
+    invalidateCachePrefix('tenko:');
+
+    if (currentUser) {
+      await logAuditAction({
+        module: 'Data TENKO',
+        recordId: `DEL-BATCH-${Date.now()}`,
+        action: 'DELETE_SELECTED_TENKO_EXAMINATIONS',
+        newValue: {
+          deletedCount: uniqueDocIds.length,
+          sampleDocIds: uniqueDocIds.slice(0, 20),
+        },
+        userId: currentUser.userId,
+        userName: currentUser.fullName,
+      });
+    }
+
+    return uniqueDocIds.length;
+  } catch (err: any) {
+    console.error('Failed to delete selected TENKO examinations:', err);
+    if (err?.code === 'permission-denied' || String(err?.message || '').toLowerCase().includes('permission')) {
+      throw new Error('Akses ditolak: hanya Super Admin yang diizinkan menghapus data TENKO.');
+    }
     throw err;
   }
 }
