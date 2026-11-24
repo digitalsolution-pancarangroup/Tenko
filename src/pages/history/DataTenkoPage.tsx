@@ -472,7 +472,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
             Data TENKO
           </h1>
           <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold whitespace-nowrap">
-            {examinations.length} Rekam Medis
+            {examinations.length} Rekam Tenko
           </span>
           <span className="text-xs text-slate-400 font-medium">
             (Menampilkan {filteredExams.length} hasil filter)
