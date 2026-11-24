@@ -138,7 +138,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
           selectedRecord.tenkoId,
           {
             userId: currentUser?.userId || 'SYS',
-            fullName: currentUser?.fullName || 'Nakes',
+            fullName: currentUser?.fullName || 'PIC TENKO',
           }
         );
         showToast(`Kasus kesehatan ${selectedRecord.driverName} dinyatakan SOLVED (Selesai).`, 'success');
@@ -151,7 +151,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
           },
           {
             userId: currentUser?.userId || 'SYS',
-            fullName: currentUser?.fullName || 'Nakes',
+            fullName: currentUser?.fullName || 'PIC TENKO',
           }
         );
         showToast('Catatan evaluasi perkembangan kesehatan berhasil diperbarui.', 'success');
@@ -230,7 +230,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
           position: createDriverObj.position,
           tenkoResult: createTenkoResult,
           indication: createIndication,
-          analyze: createAnalyze.trim() || 'Pemeriksaan keluhan kesehatan rutin oleh nakes.',
+          analyze: createAnalyze.trim() || 'Pemeriksaan keluhan kesehatan rutin oleh PIC TENKO.',
           measurement: createMeasurement.trim() || 'Pemberian vitamin dan edukasi istirahat cukup.',
           vitamin: vitaminSummary,
           vitaminDetails: selectedVitamins,
@@ -238,7 +238,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
         },
         {
           userId: currentUser?.userId || 'SYS',
-          fullName: currentUser?.fullName || 'Nakes',
+          fullName: currentUser?.fullName || 'PIC TENKO',
         }
       );
 
@@ -273,7 +273,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
       'EVALUATION',
       'STATUS',
       'TANGGAL',
-      'NAKES',
+      'PIC TENKO',
     ];
 
     const rows = filteredRecords.map((r, i) => [
@@ -523,7 +523,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
                         {r.evaluation ? (
                           <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2 text-slate-800 font-medium text-[11px] leading-relaxed">
                             <span className="text-[10px] font-bold text-slate-400 block uppercase">
-                              Evaluasi Nakes:
+                              Evaluasi PIC TENKO:
                             </span>
                             {r.evaluation}
                           </div>
@@ -632,7 +632,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Analisa Nakes</span>
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Analisa PIC TENKO</span>
                   <p className="text-slate-700 font-medium mt-0.5">{selectedRecord.analyze || '-'}</p>
                 </div>
                 <div>
@@ -803,7 +803,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Analyze (Analisa Nakes) <span className="text-rose-500">*</span>
+                  Analyze (Analisa PIC TENKO) <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   required
@@ -832,7 +832,7 @@ export const DriverHealthPage: React.FC<DriverHealthPageProps> = ({ onNavigateTo
               {/* Vitamin Selection */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Pemberian Vitamin / Obat Nakes
+                  Pemberian Vitamin / Obat PIC TENKO
                 </label>
                 <div className="border border-slate-200 rounded-xl p-3 bg-slate-50 space-y-2 max-h-48 overflow-y-auto">
                   {vitamins.map((v) => {

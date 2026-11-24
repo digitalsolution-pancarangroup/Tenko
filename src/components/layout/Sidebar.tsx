@@ -170,114 +170,119 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <span>Assessment Report</span>
               </button>
 
-              {/* Driver Health */}
-              <button
-                id="nav-driver-health"
-                onClick={() => handleNav('driver_health')}
-                className={`w-full ${navItemClass(isDriverHealthActive)}`}
-              >
-                <HeartPulse className={`w-4 h-4 shrink-0 ${isDriverHealthActive ? 'text-white' : 'text-rose-500'}`} />
-                <span>Driver Health</span>
-              </button>
+              {/* Menu tambahan khusus Super Admin */}
+              {isSuperAdmin && (
+                <>
+                  {/* Driver Health */}
+                  <button
+                    id="nav-driver-health"
+                    onClick={() => handleNav('driver_health')}
+                    className={`w-full ${navItemClass(isDriverHealthActive)}`}
+                  >
+                    <HeartPulse className={`w-4 h-4 shrink-0 ${isDriverHealthActive ? 'text-white' : 'text-rose-500'}`} />
+                    <span>Driver Health</span>
+                  </button>
 
-              {/* Medical Inventory (Standalone Menu) */}
-              <button
-                id="nav-medical-inventory"
-                onClick={() => handleNav('medical_inventory')}
-                className={`w-full ${navItemClass(currentPage === 'medical_inventory')}`}
-              >
-                <Pill className={`w-4 h-4 shrink-0 ${currentPage === 'medical_inventory' ? 'text-white' : 'text-emerald-600'}`} />
-                <span>Medical Inventory</span>
-              </button>
+                  {/* Medical Inventory (Standalone Menu) */}
+                  <button
+                    id="nav-medical-inventory"
+                    onClick={() => handleNav('medical_inventory')}
+                    className={`w-full ${navItemClass(currentPage === 'medical_inventory')}`}
+                  >
+                    <Pill className={`w-4 h-4 shrink-0 ${currentPage === 'medical_inventory' ? 'text-white' : 'text-emerald-600'}`} />
+                    <span>Medical Inventory</span>
+                  </button>
 
-              {/* Master Data (Collapsible Menu with Sub-menus) */}
-              <div className="space-y-1">
-                <button
-                  id="nav-master-data-toggle"
-                  type="button"
-                  onClick={() => setIsMasterExpanded(!isMasterExpanded)}
-                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs md:text-sm transition-all duration-200 cursor-pointer ${
-                    isMasterActive
-                      ? 'bg-slate-100 text-slate-900 font-bold'
-                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <FolderKanban className="w-4 h-4 shrink-0 text-blue-600" />
-                    <span>Master Data</span>
+                  {/* Master Data (Collapsible Menu with Sub-menus) */}
+                  <div className="space-y-1">
+                    <button
+                      id="nav-master-data-toggle"
+                      type="button"
+                      onClick={() => setIsMasterExpanded(!isMasterExpanded)}
+                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs md:text-sm transition-all duration-200 cursor-pointer ${
+                        isMasterActive
+                          ? 'bg-slate-100 text-slate-900 font-bold'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <FolderKanban className="w-4 h-4 shrink-0 text-blue-600" />
+                        <span>Master Data</span>
+                      </div>
+                      {isMasterExpanded ? (
+                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                      ) : (
+                        <ChevronRight className="w-4 h-4 text-slate-400" />
+                      )}
+                    </button>
+
+                    {/* Sub-menu items */}
+                    {isMasterExpanded && (
+                      <div className="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-100 ml-4">
+                        {/* Master Driver & Kenek */}
+                        <button
+                          id="nav-master-drivers"
+                          onClick={() => handleNav('master_drivers')}
+                          className={`w-full ${subNavItemClass(currentPage === 'master_drivers')}`}
+                        >
+                          <Truck className="w-3.5 h-3.5 shrink-0" />
+                          <span>Driver & Kenek</span>
+                        </button>
+
+                        {/* Master Driver Group */}
+                        <button
+                          id="nav-master-driver-groups"
+                          onClick={() => handleNav('master_driver_groups')}
+                          className={`w-full ${subNavItemClass(currentPage === 'master_driver_groups')}`}
+                        >
+                          <Users className="w-3.5 h-3.5 shrink-0" />
+                          <span>Driver Group</span>
+                        </button>
+
+                        {/* Master Lokasi / Pool */}
+                        <button
+                          id="nav-master-location"
+                          onClick={() => handleNav('master_location')}
+                          className={`w-full ${subNavItemClass(currentPage === 'master_location')}`}
+                        >
+                          <Building2 className="w-3.5 h-3.5 shrink-0" />
+                          <span>Lokasi / Pool</span>
+                        </button>
+
+                        {/* Master Indikasi */}
+                        <button
+                          id="nav-master-health-indications"
+                          onClick={() => handleNav('master_health_indications')}
+                          className={`w-full ${subNavItemClass(currentPage === 'master_health_indications')}`}
+                        >
+                          <Activity className="w-3.5 h-3.5 shrink-0" />
+                          <span>Master Indikasi</span>
+                        </button>
+
+                        {/* Master Vitamin */}
+                        <button
+                          id="nav-master-vitamins"
+                          onClick={() => handleNav('master_vitamins')}
+                          className={`w-full ${subNavItemClass(currentPage === 'master_vitamins')}`}
+                        >
+                          <Pill className="w-3.5 h-3.5 shrink-0" />
+                          <span>Master Vitamin</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {isMasterExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-slate-400" />
-                  )}
-                </button>
 
-                {/* Sub-menu items */}
-                {isMasterExpanded && (
-                  <div className="pl-4 pr-1 py-1 space-y-0.5 border-l-2 border-slate-100 ml-4">
-                    {/* Master Driver & Kenek */}
-                    <button
-                      id="nav-master-drivers"
-                      onClick={() => handleNav('master_drivers')}
-                      className={`w-full ${subNavItemClass(currentPage === 'master_drivers')}`}
-                    >
-                      <Truck className="w-3.5 h-3.5 shrink-0" />
-                      <span>Driver & Kenek</span>
-                    </button>
-
-                    {/* Master Driver Group */}
-                    <button
-                      id="nav-master-driver-groups"
-                      onClick={() => handleNav('master_driver_groups')}
-                      className={`w-full ${subNavItemClass(currentPage === 'master_driver_groups')}`}
-                    >
-                      <Users className="w-3.5 h-3.5 shrink-0" />
-                      <span>Driver Group</span>
-                    </button>
-
-                    {/* Master Lokasi / Pool */}
-                    <button
-                      id="nav-master-location"
-                      onClick={() => handleNav('master_location')}
-                      className={`w-full ${subNavItemClass(currentPage === 'master_location')}`}
-                    >
-                      <Building2 className="w-3.5 h-3.5 shrink-0" />
-                      <span>Lokasi / Pool</span>
-                    </button>
-
-                    {/* Master Indikasi */}
-                    <button
-                      id="nav-master-health-indications"
-                      onClick={() => handleNav('master_health_indications')}
-                      className={`w-full ${subNavItemClass(currentPage === 'master_health_indications')}`}
-                    >
-                      <Activity className="w-3.5 h-3.5 shrink-0" />
-                      <span>Master Indikasi</span>
-                    </button>
-
-                    {/* Master Vitamin */}
-                    <button
-                      id="nav-master-vitamins"
-                      onClick={() => handleNav('master_vitamins')}
-                      className={`w-full ${subNavItemClass(currentPage === 'master_vitamins')}`}
-                    >
-                      <Pill className="w-3.5 h-3.5 shrink-0" />
-                      <span>Master Vitamin</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* User Management */}
-              <button
-                id="nav-user-management"
-                onClick={() => handleNav('user_management')}
-                className={`w-full ${navItemClass(currentPage === 'user_management')}`}
-              >
-                <UserCog className="w-4 h-4 shrink-0 text-purple-600" />
-                <span>User Management</span>
-              </button>
+                  {/* User Management */}
+                  <button
+                    id="nav-user-management"
+                    onClick={() => handleNav('user_management')}
+                    className={`w-full ${navItemClass(currentPage === 'user_management')}`}
+                  >
+                    <UserCog className="w-4 h-4 shrink-0 text-purple-600" />
+                    <span>User Management</span>
+                  </button>
+                </>
+              )}
             </nav>
           </div>
         </div>

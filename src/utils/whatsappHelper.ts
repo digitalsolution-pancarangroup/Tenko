@@ -102,7 +102,7 @@ export function buildTenkoWhatsAppMessage(exam: TenkoExamination): string {
 🏢 *Group/Armada:* ${exam.driverGroupSnapshot || '-'}
 📅 *Tanggal Periksa:* ${exam.examinationDate} ${examTime ? `pukul ${examTime} WIB` : ''}
 📍 *Lokasi Pool:* ${exam.locationNameSnapshot || 'Pool Pancaran'}
-🩺 *Pemeriksa:* ${exam.examinerName || 'Nakes Pemeriksa'}
+🩺 *Pemeriksa:* ${exam.examinerName || 'PIC TENKO'}
 
 ${statusEmoji} *STATUS KELAYAKAN:*
 *${statusText}*
@@ -115,7 +115,7 @@ ${statusEmoji} *STATUS KELAYAKAN:*
 • Narkoba Test: *${exam.drugTest}*
 • Jam Istirahat/Tidur: *${exam.offDutySleepDuration} Jam*
 
-📝 *Catatan / Rekomendasi Nakes:*
+📝 *Catatan / Rekomendasi PIC TENKO:*
 _${notesText}_
 
 🔒 *Tautan Kartu Tenko Digital Driver:*

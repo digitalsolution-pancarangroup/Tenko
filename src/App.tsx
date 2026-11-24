@@ -29,7 +29,8 @@ import { seedInitialMasterData } from './services/seedData';
 import { Loader2 } from 'lucide-react';
 
 const MainAppContent: React.FC = () => {
-  const { currentUser, loading, isSuperAdmin } = useAuth();
+  const { currentUser, loading, isSuperAdmin: authIsSuperAdmin } = useAuth();
+  const isSuperAdmin = authIsSuperAdmin || currentUser?.role === 'SUPER_ADMIN';
 
   const [currentPage, setCurrentPage] = useState<NavigationPage>('nakes_dashboard');
   const [returnPage, setReturnPage] = useState<NavigationPage>('data_tenko');
@@ -122,6 +123,17 @@ const MainAppContent: React.FC = () => {
     );
   }
 
+  const isPicTenkoAllowedPage = (page: NavigationPage): boolean =>
+    page === 'dashboard' ||
+    page === 'nakes_dashboard' ||
+    page === 'data_tenko' ||
+    page === 'new_examination' ||
+    page === 'examination_result' ||
+    page === 'examination_detail' ||
+    page === 'print_examination' ||
+    page === 'attendance_log' ||
+    page === 'assessment_report';
+
   // Update default landing page based on role when user logs in
   useEffect(() => {
     if (currentUser) {
@@ -132,6 +144,13 @@ const MainAppContent: React.FC = () => {
       }
     }
   }, [currentUser?.role]);
+
+  // Prevent non-Super Admin roles from staying on restricted master/admin pages
+  useEffect(() => {
+    if (currentUser && !isSuperAdmin && !isPicTenkoAllowedPage(currentPage)) {
+      setCurrentPage('nakes_dashboard');
+    }
+  }, [currentUser, isSuperAdmin, currentPage]);
 
   if (loading) {
     return (
@@ -170,8 +189,8 @@ const MainAppContent: React.FC = () => {
   return (
     <>
       <Layout currentPage={currentPage} onNavigate={(p) => setCurrentPage(p)}>
-        {/* VIEW 1: Nakes Dashboard */}
-        {currentPage === 'nakes_dashboard' && (
+        {/* VIEW 1: PIC TENKO Dashboard */}
+        {(currentPage === 'nakes_dashboard' || (!isSuperAdmin && (currentPage === 'dashboard' || currentPage === 'superadmin_dashboard'))) && (
           <NakesDashboard
             onNavigate={(p) => setCurrentPage(p)}
             onSelectExamination={handleSelectExamination}
@@ -183,7 +202,7 @@ const MainAppContent: React.FC = () => {
         )}
 
         {/* VIEW 2: Super Admin Dashboard */}
-        {currentPage === 'superadmin_dashboard' && (
+        {isSuperAdmin && (currentPage === 'superadmin_dashboard' || currentPage === 'dashboard') && (
           <SuperAdminDashboard
             onNavigate={(p) => setCurrentPage(p)}
             onSelectExamination={handleSelectExamination}
@@ -265,34 +284,34 @@ const MainAppContent: React.FC = () => {
           />
         )}
 
-        {/* VIEW 6-SECURITY: Security Gate Verification Portal */}
-        {currentPage === 'security_gate' && (
+        {/* VIEW 6-SECURITY: Security Gate Verification Portal (Super Admin) */}
+        {isSuperAdmin && currentPage === 'security_gate' && (
           <SecurityGateVerificationPage />
         )}
 
-        {/* VIEW 6B: Driver Health (Monitoring Keluhan & Evaluasi Nakes) */}
-        {currentPage === 'driver_health' && <DriverHealthPage />}
+        {/* VIEW 6B: Driver Health (Super Admin) */}
+        {isSuperAdmin && currentPage === 'driver_health' && <DriverHealthPage />}
 
-        {/* VIEW 6C: Medical Inventory (Manajemen Stok Obat Per Pool & Akumulasi) */}
-        {currentPage === 'medical_inventory' && <MedicalInventoryPage />}
+        {/* VIEW 6C: Medical Inventory (Super Admin) */}
+        {isSuperAdmin && currentPage === 'medical_inventory' && <MedicalInventoryPage />}
 
-        {/* VIEW 7: Master Drivers */}
-        {currentPage === 'master_drivers' && <MasterDriversPage />}
+        {/* VIEW 7: Master Drivers (Super Admin) */}
+        {isSuperAdmin && currentPage === 'master_drivers' && <MasterDriversPage />}
 
-        {/* VIEW 8: Master Driver Groups */}
-        {currentPage === 'master_driver_groups' && <MasterDriverGroupsPage />}
+        {/* VIEW 8: Master Driver Groups (Super Admin) */}
+        {isSuperAdmin && currentPage === 'master_driver_groups' && <MasterDriverGroupsPage />}
 
-        {/* VIEW 9: Master Location */}
-        {currentPage === 'master_location' && <MasterLocationPage />}
+        {/* VIEW 9: Master Location (Super Admin) */}
+        {isSuperAdmin && currentPage === 'master_location' && <MasterLocationPage />}
 
-        {/* VIEW 9B: Master Health Indications */}
-        {currentPage === 'master_health_indications' && <MasterHealthIndicationsPage />}
+        {/* VIEW 9B: Master Health Indications (Super Admin) */}
+        {isSuperAdmin && currentPage === 'master_health_indications' && <MasterHealthIndicationsPage />}
 
-        {/* VIEW 9C: Master Vitamins */}
-        {currentPage === 'master_vitamins' && <MasterVitaminsPage />}
+        {/* VIEW 9C: Master Vitamins (Super Admin) */}
+        {isSuperAdmin && currentPage === 'master_vitamins' && <MasterVitaminsPage />}
 
-        {/* VIEW 10: User Management (Consolidates Nakes, Super Admin, Security) */}
-        {(currentPage === 'user_management' || currentPage === 'master_nakes') && <UserManagementPage />}
+        {/* VIEW 10: User Management (Super Admin) */}
+        {isSuperAdmin && (currentPage === 'user_management' || currentPage === 'master_nakes') && <UserManagementPage />}
 
         {/* VIEW 11: Dedicated Printable TENKO Report View */}
         {currentPage === 'print_examination' && selectedExamination && (

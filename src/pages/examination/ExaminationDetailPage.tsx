@@ -214,13 +214,13 @@ export const ExaminationDetailPage: React.FC<ExaminationDetailPageProps> = ({
                 <StatusBadge type="summary" value={examination.summary} size="md" />
               </div>
               <div>
-                <span className="text-slate-500 block text-[11px]">Rekomendasi Nakes:</span>
+                <span className="text-slate-500 block text-[11px]">Rekomendasi PIC TENKO:</span>
                 <StatusBadge type="recommendation" value={examination.recommendation} size="md" />
               </div>
             </div>
 
             <div>
-              <span className="text-slate-500 block text-[11px] mb-1">Catatan Nakes:</span>
+              <span className="text-slate-500 block text-[11px] mb-1">Catatan PIC TENKO:</span>
               <p className="bg-white p-3 rounded-xl border border-blue-100 text-slate-800 italic">
                 {examination.note || '- Tidak ada catatan tambahan -'}
               </p>
@@ -235,7 +235,7 @@ export const ExaminationDetailPage: React.FC<ExaminationDetailPageProps> = ({
               7. Informasi Pemeriksa
             </h4>
             <div className="space-y-1 text-slate-600">
-              <p>Nakes Pemeriksa: <strong className="text-slate-900">{examination.examinerName}</strong></p>
+              <p>PIC TENKO Pemeriksa: <strong className="text-slate-900">{examination.examinerName}</strong></p>
               <p>Waktu Selesai: <strong className="text-slate-900">{new Date(examination.finishTime).toLocaleString('id-ID')}</strong></p>
               <p>Lokasi Pool: <strong className="text-slate-900">{examination.locationNameSnapshot || 'Pool Marunda'}</strong></p>
             </div>

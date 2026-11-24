@@ -76,7 +76,7 @@ export const ClearDataModal: React.FC<ClearDataModalProps> = ({ isOpen, onClose,
             <div>
               <p className="font-bold">Perhatian Pembersihan Data:</p>
               <p className="text-amber-800 mt-0.5">
-                Data master esensial seperti <strong>166 Driver Groups</strong>, <strong>Master Lokasi/Pool</strong>, <strong>Indikasi Kesehatan</strong>, <strong>Katalog Vitamin</strong>, dan <strong>Akun Petugas Nakes/Admin</strong> tetap dipertahankan.
+                Data master esensial seperti <strong>166 Driver Groups</strong>, <strong>Master Lokasi/Pool</strong>, <strong>Indikasi Kesehatan</strong>, <strong>Katalog Vitamin</strong>, dan <strong>Akun PIC TENKO/Admin</strong> tetap dipertahankan.
               </p>
             </div>
           </div>

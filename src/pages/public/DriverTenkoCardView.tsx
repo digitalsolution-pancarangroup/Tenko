@@ -373,7 +373,7 @@ export const DriverTenkoCardView: React.FC<DriverTenkoCardViewProps> = ({
                   <span className="font-bold text-white uppercase">{examination.driverNameSnapshot} ({examination.driverId})</span>
                 </div>
                 <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-                  <span className="text-slate-400">Waktu Pemeriksaan Nakes:</span>
+                  <span className="text-slate-400">Waktu Pemeriksaan PIC TENKO:</span>
                   <span className="font-mono text-slate-200">
                     {examination.examinationDate} {new Date(examination.finishTime).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WIB
                   </span>

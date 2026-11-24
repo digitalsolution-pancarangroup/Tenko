@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({
         return (
           <>
             <Stethoscope className="w-3 h-3 text-blue-600" />
-            <span>Nakes Medis</span>
+            <span>PIC TENKO</span>
           </>
         );
       case 'SECURITY':

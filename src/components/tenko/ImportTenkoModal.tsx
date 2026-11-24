@@ -352,7 +352,7 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
         const rawSummary = getVal(['SUMMARY', 'HASIL', 'STATUS', 'KELULUSAN']);
         const rawRecommendation = getVal(['RECOMMENDATION', 'REKOMENDASI', 'REKOMENDASI MEDIS', 'STATUS KELAIKAN']);
         const rawNote = getVal(['NOTE', 'CATATAN', 'NOTES', 'KETERANGAN']);
-        const rawExaminer = getVal(['CREATED BY', 'NAKES PEMERIKSA', 'PEMERIKSA', 'EXAMINER NAME', 'NAKES', 'PETUGAS']);
+        const rawExaminer = getVal(['CREATED BY', 'PIC TENKO', 'NAKES PEMERIKSA', 'PEMERIKSA', 'EXAMINER NAME', 'NAKES', 'PETUGAS']);
 
         const cleanDriverId = String(rawDriverId).trim().toUpperCase();
         const matchedDriver = driverMap.get(cleanDriverId);
@@ -438,14 +438,18 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
         let error: string | undefined = undefined;
         if (!cleanDriverId && !cleanDriverName) {
           error = 'Driver ID & Nama tidak boleh kosong';
+        } else if (!cleanDriverId) {
+          error = 'Driver ID wajib diisi sesuai Master Driver';
+        } else if (!matchedDriver) {
+          error = `Driver ID "${cleanDriverId}" belum terdaftar di Master Driver`;
         }
 
         parsed.push({
           rowNumber: idx + 1,
           examinationDate: parsedDate,
           finishTime: rawTime ? (String(rawTime).includes('T') ? String(rawTime) : `${parsedDate}T${String(rawTime).padStart(5, '0')}:00`) : undefined,
-          driverId: cleanDriverId || `DRV-${idx + 1}`,
-          driverName: cleanDriverName || `Driver ${idx + 1}`,
+          driverId: cleanDriverId || '-',
+          driverName: cleanDriverName || (cleanDriverId ? `Driver ${cleanDriverId}` : '-'),
           position: pos,
           driverGroup: cleanGroup,
           locationName: String(rawPool).trim() || 'Pool Utama',
@@ -474,8 +478,8 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
           summary,
           recommendation,
           note: String(rawNote).trim(),
-          examinerName: String(rawExaminer).trim() || currentUser?.fullName || 'Nakes Pemeriksa',
-          isAutoDriver: !matchedDriver,
+          examinerName: String(rawExaminer).trim() || currentUser?.fullName || 'PIC TENKO',
+          isAutoDriver: false,
           error,
         });
       });
@@ -507,6 +511,10 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
 
       const result = await importTenkoBatch(validRows, userPayload);
       setImportResult(result);
+      if (result.importedCount === 0) {
+        showToast('Tidak ada data yang masuk. Pastikan seluruh Driver ID terdaftar di Master Driver.', 'error');
+        return;
+      }
       showToast(
         `Import sukses! ${result.importedCount} data pemeriksaan TENKO berhasil dimasukkan ke database.`,
         'success'
@@ -594,16 +602,16 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 max-w-xl mx-auto pt-2">
                 <div className="bg-white p-3.5 rounded-2xl border border-blue-200">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase">Total Baris</p>
-                  <p className="text-xl font-black text-slate-900">{importResult.totalProcessed}</p>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Total Baris File</p>
+                  <p className="text-xl font-black text-slate-900">{counts.total}</p>
                 </div>
                 <div className="bg-white p-3.5 rounded-2xl border border-blue-200">
                   <p className="text-[11px] font-bold text-slate-500 uppercase">Data TENKO Masuk</p>
                   <p className="text-xl font-black text-emerald-600">+{importResult.importedCount}</p>
                 </div>
                 <div className="bg-white p-3.5 rounded-2xl border border-blue-200">
-                  <p className="text-[11px] font-bold text-slate-500 uppercase">Driver Baru Didaftarkan</p>
-                  <p className="text-xl font-black text-blue-600">+{importResult.autoCreatedDriversCount}</p>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase">Ditolak / Tidak Valid</p>
+                  <p className="text-xl font-black text-rose-600">{counts.invalid + importResult.errors.length}</p>
                 </div>
               </div>
 
@@ -694,12 +702,12 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
                     </div>
                   </div>
 
-                  {counts.autoDrivers > 0 && (
-                    <div className="p-3 rounded-2xl bg-blue-50/80 border border-blue-200 flex items-start gap-2.5 text-xs text-blue-900">
-                      <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                  {counts.invalid > 0 && (
+                    <div className="p-3 rounded-2xl bg-rose-50/90 border border-rose-200 flex items-start gap-2.5 text-xs text-rose-900">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold">Sinkronisasi Master Driver Otomatis: </span>
-                        Terdapat <strong>{counts.autoDrivers} driver</strong> di dalam file yang belum ada di Master Driver. Sistem akan otomatis mendaftarkannya saat import.
+                        <span className="font-bold">Data Ditolak ({counts.invalid} Baris Tidak Valid): </span>
+                        Baris dengan ID Driver kosong atau <strong>belum terdaftar di Master Driver</strong> akan ditolak dan tidak disimpan. Silakan hubungi Super Admin untuk mendaftarkan driver terlebih dahulu.
                       </div>
                     </div>
                   )}
@@ -784,13 +792,21 @@ export const ImportTenkoModal: React.FC<ImportTenkoModalProps> = ({
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {filteredPreview.map((row) => (
-                          <tr key={row.rowNumber} className="hover:bg-slate-50/80 transition">
+                          <tr
+                            key={row.rowNumber}
+                            className={`transition ${row.error ? 'bg-rose-50/70 hover:bg-rose-50' : 'hover:bg-slate-50/80'}`}
+                          >
                             <td className="py-2.5 px-3 text-slate-400 font-mono">{row.rowNumber}</td>
                             <td className="py-2.5 px-3 text-slate-600 font-mono text-[11px]">{row.examinationDate}</td>
                             <td className="py-2.5 px-3 font-mono font-bold text-blue-900">{row.driverId}</td>
                             <td className="py-2.5 px-3">
                               <span className="font-bold text-slate-900 block">{row.driverName}</span>
-                              <span className="text-[10px] text-slate-400">{row.position}</span>
+                              <span className="text-[10px] text-slate-400 block">{row.position}</span>
+                              {row.error && (
+                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                  Ditolak: {row.error}
+                                </span>
+                              )}
                             </td>
                             <td className="py-2.5 px-3 text-slate-700 max-w-[140px] truncate">{row.driverGroup}</td>
                             <td className="py-2.5 px-3 font-mono font-semibold text-slate-800">{row.bloodPressureResult}</td>

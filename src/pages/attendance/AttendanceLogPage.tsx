@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
   AttendanceLogItem,
@@ -10,7 +10,7 @@ import {
 import {
   getAttendanceLogs,
   getRecentAttendanceDates,
-  deleteAttendanceLogsByDate,
+  deleteSelectedAttendanceLogs,
   computeAttendanceTenkoComparison,
 } from '../../services/attendanceService';
 import { getTenkoExaminations } from '../../services/tenkoService';
@@ -54,7 +54,8 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
   onStartExaminationWithDriver,
   onNavigate,
 }) => {
-  const { currentUser, isSuperAdmin } = useAuth();
+  const { currentUser, isSuperAdmin: authIsSuperAdmin } = useAuth();
+  const canDeleteLogs = authIsSuperAdmin || currentUser?.role === 'SUPER_ADMIN';
   const { showToast } = useToast();
 
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLogItem[]>([]);
@@ -73,10 +74,12 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'PENDING' | 'DONE'>('ALL');
   const [filterFlag, setFilterFlag] = useState<'ALL' | 'IN' | 'OUT'>('ALL');
 
-  // Modals
+  // Modals & Selection State (Super Admin only)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isDeleteDateModalOpen, setIsDeleteDateModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
 
   // Pagination
   const [currentPageNum, setCurrentPageNum] = useState(1);
@@ -204,16 +207,104 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
     return filteredList.slice(start, start + itemsPerPage);
   }, [filteredList, currentPageNum, itemsPerPage]);
 
-  const handleDeleteCurrentDateLogs = async () => {
-    if (!selectedDate) return;
+  // Clamp currentPageNum when dataset shrinks after deletion or filter change
+  useEffect(() => {
+    if (currentPageNum > totalPages) {
+      setCurrentPageNum(totalPages);
+    }
+  }, [currentPageNum, totalPages]);
+
+  // Auto-reset selection whenever date or filters change
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [selectedDate, filterFlag, filterSite, filterStatus, searchQuery]);
+
+  const getLogRowId = (item: AttendanceComparisonItem): string => item.logDocumentId || '';
+
+  const filteredIds = useMemo(
+    () => filteredList.map(getLogRowId).filter(Boolean),
+    [filteredList]
+  );
+
+  const paginatedIds = useMemo(
+    () => paginatedList.map(getLogRowId).filter(Boolean),
+    [paginatedList]
+  );
+
+  const selectedCount = selectedIds.size;
+
+  const isPageAllSelected = useMemo(
+    () => paginatedIds.length > 0 && paginatedIds.every((id) => selectedIds.has(id)),
+    [paginatedIds, selectedIds]
+  );
+
+  const isPagePartiallySelected = useMemo(
+    () => paginatedIds.some((id) => selectedIds.has(id)) && !isPageAllSelected,
+    [paginatedIds, selectedIds, isPageAllSelected]
+  );
+
+  const isAllFilteredSelected = useMemo(
+    () => filteredIds.length > 0 && filteredIds.every((id) => selectedIds.has(id)),
+    [filteredIds, selectedIds]
+  );
+
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = isPagePartiallySelected;
+    }
+  }, [isPagePartiallySelected]);
+
+  const toggleSelectOne = (rowId: string) => {
+    if (!rowId) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  };
+
+  const toggleSelectPage = () => {
+    if (paginatedIds.length === 0) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isPageAllSelected) {
+        paginatedIds.forEach((id) => next.delete(id));
+      } else {
+        paginatedIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllFiltered = () => {
+    setSelectedIds(new Set(filteredIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  const handleDeleteSelectedLogs = async () => {
+    if (selectedIds.size === 0) {
+      showToast('Pilih minimal 1 log absensi terlebih dahulu untuk dihapus.', 'error');
+      setIsDeleteModalOpen(false);
+      return;
+    }
+
     setDeleting(true);
     try {
-      const count = await deleteAttendanceLogsByDate(selectedDate, {
+      const count = await deleteSelectedAttendanceLogs(Array.from(selectedIds), {
+        userId: currentUser?.userId,
         email: currentUser?.email,
         fullName: currentUser?.fullName,
       });
-      showToast(`Berhasil menghapus ${count} log absensi tanggal ${selectedDate}.`, 'success');
-      setIsDeleteDateModalOpen(false);
+      showToast(`Berhasil menghapus ${count} log absensi terpilih.`, 'success');
+      setSelectedIds(new Set());
+      setIsDeleteModalOpen(false);
       await loadAllData(true);
     } catch (err: any) {
       console.error(err);
@@ -263,7 +354,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
     }
 
     const message = encodeURIComponent(
-      `Halo Bapak ${item.driverName} (ID: ${item.userCode}), kami mencatat Anda telah hadir di ${item.siteName} pada ${item.logTime || item.inLogTime}. Harap segera merapat ke Pos Kesehatan / Ruang TENKO untuk melakukan pemeriksaan kesehatan pra-tugas. Terima kasih. - Nakes TENKO Logistik`
+      `Halo Bapak ${item.driverName} (ID: ${item.userCode}), kami mencatat Anda telah hadir di ${item.siteName} pada ${item.logTime || item.inLogTime}. Harap segera merapat ke Pos Kesehatan / Ruang TENKO untuk melakukan pemeriksaan kesehatan pra-tugas. Terima kasih. - PIC TENKO Logistik`
     );
 
     if (phoneNum) {
@@ -483,18 +574,6 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
               {d} {d === todayStr ? '(Hari Ini)' : ''}
             </button>
           ))}
-
-          {/* Superadmin Delete Logs for Selected Date */}
-          {isSuperAdmin && comparisonResult.totalLogs > 0 && (
-            <button
-              type="button"
-              onClick={() => setIsDeleteDateModalOpen(true)}
-              className="ml-auto flex items-center gap-1.5 text-xs text-rose-600 hover:text-rose-800 font-semibold px-2.5 py-1 rounded-lg hover:bg-rose-50 transition cursor-pointer"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Hapus Semua Log Tanggal {selectedDate}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -527,11 +606,75 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
           </div>
         </div>
 
+        {/* Selection Toolbar & Cross-Page Filter Select Banner (Super Admin Only) */}
+        {canDeleteLogs && selectedCount > 0 && (
+          <div className="mx-4 mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-blue-50/90 border border-blue-200 text-xs animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-2 text-blue-950">
+              <span className="font-extrabold px-2.5 py-0.5 rounded-lg bg-blue-600 text-white">
+                {selectedCount} dipilih
+              </span>
+              {isPageAllSelected && filteredList.length > paginatedList.length && !isAllFilteredSelected && (
+                <>
+                  <span className="text-slate-600">
+                    ({paginatedList.length} log di halaman ini dipilih)
+                  </span>
+                  <button
+                    type="button"
+                    id="btn-select-all-filtered-attendance"
+                    onClick={handleSelectAllFiltered}
+                    className="font-bold text-blue-700 hover:text-blue-900 underline cursor-pointer"
+                  >
+                    Pilih semua {filteredList.length} log hasil filter
+                  </button>
+                </>
+              )}
+              {isAllFilteredSelected && filteredList.length > paginatedList.length && (
+                <span className="text-blue-800 font-semibold">
+                  Semua {filteredList.length} log hasil filter telah dipilih.
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition cursor-pointer"
+              >
+                Batal Pilih
+              </button>
+              <button
+                type="button"
+                id="btn-bulk-delete-attendance"
+                onClick={() => setIsDeleteModalOpen(true)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Data ({selectedCount})</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Table View */}
-        <div className="overflow-x-auto min-w-full">
+        <div className={`overflow-x-auto min-w-full ${canDeleteLogs && selectedCount > 0 ? 'mt-3' : ''}`}>
           <table className="w-full text-left text-xs text-slate-700">
             <thead className="bg-slate-100/80 text-[10px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-200">
               <tr>
+                {canDeleteLogs && (
+                  <th className="py-3 px-3 pl-4 w-10">
+                    <input
+                      ref={headerCheckboxRef}
+                      id="checkbox-select-all-page-attendance"
+                      type="checkbox"
+                      checked={isPageAllSelected}
+                      onChange={toggleSelectPage}
+                      aria-label="Pilih semua log di halaman ini"
+                      title="Pilih semua log di halaman ini"
+                      className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                  </th>
+                )}
                 <th className="px-4 py-3 text-center w-12">No</th>
                 <th className="px-4 py-3">User Code (ID Driver)</th>
                 <th className="px-4 py-3">Nama Driver / Kenek</th>
@@ -546,7 +689,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
             <tbody className="divide-y divide-slate-100 font-normal">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={canDeleteLogs ? 10 : 9} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                       <span>Memuat data absensi ERP & pencocokan TENKO...</span>
@@ -555,7 +698,7 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
                 </tr>
               ) : paginatedList.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500">
+                  <td colSpan={canDeleteLogs ? 10 : 9} className="py-12 text-center text-slate-500">
                     <div className="flex flex-col items-center justify-center gap-2 max-w-md mx-auto">
                       <FileSpreadsheet className="w-10 h-10 text-slate-300" />
                       <p className="font-bold text-slate-700 text-sm">
@@ -571,14 +714,32 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
                 paginatedList.map((item, idx) => {
                   const absoluteIdx = (currentPageNum - 1) * itemsPerPage + idx + 1;
                   const isClockIn = item.fingerFlag === 1;
+                  const rowId = getLogRowId(item);
+                  const isSelected = Boolean(rowId) && selectedIds.has(rowId);
 
                   return (
                     <tr
-                      key={item.logDocumentId || `${item.userCode}_${item.fingerFlag}_${idx}`}
-                      className={`hover:bg-slate-50/80 transition ${
-                        isClockIn && !item.hasTenko ? 'bg-amber-50/20' : ''
+                      key={rowId || `${item.userCode}_${item.fingerFlag}_${idx}`}
+                      className={`transition ${
+                        isSelected
+                          ? 'bg-blue-50/70 hover:bg-blue-50'
+                          : isClockIn && !item.hasTenko
+                          ? 'bg-amber-50/20 hover:bg-slate-50/80'
+                          : 'hover:bg-slate-50/80'
                       }`}
                     >
+                      {canDeleteLogs && (
+                        <td className="py-3.5 px-3 pl-4 w-10">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={!rowId}
+                            onChange={() => toggleSelectOne(rowId)}
+                            aria-label={`Pilih log absensi ${item.userCode} - ${item.driverName}`}
+                            className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                          />
+                        </td>
+                      )}
                       {/* No */}
                       <td className="px-4 py-3.5 text-center text-slate-400 font-medium">
                         {absoluteIdx}
@@ -771,50 +932,54 @@ export const AttendanceLogPage: React.FC<AttendanceLogPageProps> = ({
         onSuccess={() => loadAllData(true)}
       />
 
-      {/* Delete Date Confirm Modal */}
-      {isDeleteDateModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 border border-slate-200 shadow-2xl space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center">
-              <Trash2 className="w-6 h-6" />
-            </div>
+      {/* Delete Selected Attendance Logs Confirmation Modal */}
+      {isDeleteModalOpen && selectedCount > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-6 text-center space-y-4">
+              <div className="w-14 h-14 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto">
+                <Trash2 className="w-7 h-7" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900">Hapus {selectedCount} Log Absensi?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Tindakan ini akan{' '}
+                  <strong>
+                    menghapus permanen {selectedCount === filteredList.length && selectedCount > 1 ? `seluruh ${selectedCount}` : selectedCount} log absensi yang dipilih
+                  </strong>{' '}
+                  (tanggal <span className="font-bold text-slate-700">{selectedDate}</span>) dari database Firestore.
+                </p>
+                <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl mt-3 border border-amber-200 text-left">
+                  ⚠️ <strong>Catatan:</strong> Log absensi yang dihapus tidak dapat dipulihkan. Data <strong>TENKO</strong> dan <strong>Master Driver</strong> tidak akan terhapus.
+                </p>
+              </div>
 
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Hapus Log Absensi Tanggal Ini?</h3>
-              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                Apakah Anda yakin ingin menghapus seluruh log absensi ERP pada tanggal{' '}
-                <span className="font-bold text-slate-800">{selectedDate}</span>?
-                Tindakan ini tidak dapat dibatalkan.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2.5 pt-2">
-              <button
-                type="button"
-                onClick={() => setIsDeleteDateModalOpen(false)}
-                disabled={deleting}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
-              >
-                Batal
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteCurrentDateLogs}
-                disabled={deleting}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center gap-1.5"
-              >
-                {deleting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteModalOpen(false)}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  id="btn-confirm-delete-selected-attendance"
+                  onClick={handleDeleteSelectedLogs}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white text-xs font-bold rounded-xl transition shadow-md shadow-rose-600/25 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {deleting ? (
                     <span>Menghapus...</span>
-                  </>
-                ) : (
-                  <>
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Ya, Hapus Semua Log</span>
-                  </>
-                )}
-              </button>
+                  ) : (
+                    <>
+                      <Trash2 className="w-4 h-4" />
+                      <span>Ya, Hapus ({selectedCount} Data)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>

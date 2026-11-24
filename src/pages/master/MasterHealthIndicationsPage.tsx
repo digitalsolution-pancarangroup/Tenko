@@ -118,7 +118,7 @@ export const MasterHealthIndicationsPage: React.FC = () => {
             note: cleanNote,
             status: formStatus,
           },
-          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'Nakes' }
+          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'PIC TENKO' }
         );
         showToast('Indikasi kesehatan berhasil diperbarui.', 'success');
       } else {
@@ -129,7 +129,7 @@ export const MasterHealthIndicationsPage: React.FC = () => {
             note: cleanNote,
             status: formStatus,
           },
-          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'Nakes' }
+          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'PIC TENKO' }
         );
         showToast('Indikasi kesehatan berhasil ditambahkan.', 'success');
       }
@@ -149,7 +149,7 @@ export const MasterHealthIndicationsPage: React.FC = () => {
       const docId = itemToDelete.indicationDocumentId || itemToDelete.indicationId;
       await deleteHealthIndication(docId, {
         userId: currentUser?.userId || 'SYS',
-        fullName: currentUser?.fullName || 'Nakes',
+        fullName: currentUser?.fullName || 'PIC TENKO',
       });
       showToast(`Indikasi ${itemToDelete.name} berhasil dihapus.`, 'success');
       setItemToDelete(null);

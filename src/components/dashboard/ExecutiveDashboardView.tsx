@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   TenkoExamination,
   Driver,
+  DriverGroup,
   AttendanceLogItem,
 } from '../../types';
 import { getTenkoExaminations } from '../../services/tenkoService';
 import { getDrivers } from '../../services/driverService';
+import { getDriverGroups } from '../../services/masterService';
 import {
   getAttendanceLogs,
   getAttendanceLogsByDateRange,
@@ -34,6 +36,10 @@ import {
   UserCheck,
   TrendingUp,
   MapPin,
+  Filter,
+  ChevronDown,
+  X,
+  Check,
 } from 'lucide-react';
 import {
   BarChart,
@@ -62,10 +68,17 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   // Master & Transaction Data States
   const [examinations, setExaminations] = useState<TenkoExamination[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [driverGroups, setDriverGroups] = useState<DriverGroup[]>([]);
   const [attendanceLogs, setAttendanceLogs] = useState<AttendanceLogItem[]>([]);
   const [recentAttendanceDates, setRecentAttendanceDates] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Global Multi-Select Group Filter State
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [groupSearchInput, setGroupSearchInput] = useState('');
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+  const groupDropdownRef = useRef<HTMLDivElement>(null);
 
   // Filters for Chart 1 (Monthly Result)
   const currentYear = new Date().getFullYear();
@@ -112,6 +125,21 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     loadAllDashboardData();
   }, []);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (groupDropdownRef.current && !groupDropdownRef.current.contains(e.target as Node)) {
+        setShowGroupDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    setTableResultPage(1);
+    setTableAbsenPage(1);
+  }, [selectedGroups]);
+
   const loadAllDashboardData = async (silent = false) => {
     if (!silent) setLoading(true);
     else setIsRefreshing(true);
@@ -121,15 +149,17 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       thirtyOneDaysAgo.setDate(thirtyOneDaysAgo.getDate() - 31);
       const startRangeDate = thirtyOneDaysAgo.toISOString().split('T')[0];
 
-      const [allExams, allDrivers, recentLogs, recentDates] = await Promise.all([
+      const [allExams, allDrivers, allGroups, recentLogs, recentDates] = await Promise.all([
         getTenkoExaminations(undefined, silent),
         getDrivers(silent),
+        getDriverGroups(silent),
         getAttendanceLogsByDateRange(startRangeDate, undefined, silent),
         getRecentAttendanceDates(10, silent),
       ]);
 
       setExaminations(allExams);
       setDrivers(allDrivers);
+      setDriverGroups(allGroups);
       setAttendanceLogs(recentLogs);
       setRecentAttendanceDates(recentDates);
 
@@ -183,6 +213,119 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   }, [recentAttendanceDates, attendanceLogs, todayStr]);
 
   // =========================================================================
+  // 0. GLOBAL MULTI-SELECT GROUP FILTER LOGIC
+  // =========================================================================
+  const availableGroupOptions = useMemo(() => {
+    const groupMap = new Map<string, string>();
+    const registerGroup = (raw?: string) => {
+      const clean = (raw || '').trim();
+      if (!clean) return;
+      const key = clean.toLowerCase();
+      if (!groupMap.has(key)) {
+        groupMap.set(key, clean);
+      }
+    };
+
+    driverGroups.forEach((g) => registerGroup(g.groupName || g.groupId));
+    drivers.forEach((d) => registerGroup(d.driverGroupId));
+    examinations.forEach((e) => registerGroup(e.driverGroupSnapshot));
+
+    return Array.from(groupMap.values()).sort((a, b) => a.localeCompare(b, 'id'));
+  }, [driverGroups, drivers, examinations]);
+
+  const filteredGroupOptions = useMemo(() => {
+    const q = groupSearchInput.trim().toLowerCase();
+    if (!q) return availableGroupOptions;
+    return availableGroupOptions.filter((g) => g.toLowerCase().includes(q));
+  }, [availableGroupOptions, groupSearchInput]);
+
+  const selectedGroupSet = useMemo(
+    () => new Set(selectedGroups.map((g) => g.trim().toLowerCase()).filter(Boolean)),
+    [selectedGroups]
+  );
+  const isGroupFilterActive = selectedGroupSet.size > 0;
+
+  const toggleGroupSelection = (groupName: string) => {
+    setSelectedGroups((prev) => {
+      const lower = groupName.trim().toLowerCase();
+      const exists = prev.some((item) => item.trim().toLowerCase() === lower);
+      if (exists) {
+        return prev.filter((item) => item.trim().toLowerCase() !== lower);
+      }
+      return [...prev, groupName];
+    });
+  };
+
+  const handleSelectFilteredGroups = () => {
+    setSelectedGroups((prev) => {
+      const map = new Map<string, string>();
+      prev.forEach((g) => map.set(g.trim().toLowerCase(), g));
+      filteredGroupOptions.forEach((g) => map.set(g.trim().toLowerCase(), g));
+      return Array.from(map.values());
+    });
+  };
+
+  const handleClearGroups = () => {
+    setSelectedGroups([]);
+    setGroupSearchInput('');
+  };
+
+  const driverByIdMap = useMemo(() => {
+    const map = new Map<string, Driver>();
+    drivers.forEach((drv) => {
+      const code = String(drv.driverId || '').trim().toUpperCase();
+      if (code) map.set(code, drv);
+    });
+    return map;
+  }, [drivers]);
+
+  const examGroupLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    examinations.forEach((exam) => {
+      const code = String(exam.driverId || '').trim().toUpperCase();
+      if (code && exam.examinationDate && exam.driverGroupSnapshot?.trim()) {
+        map.set(`${exam.examinationDate}__${code}`, exam.driverGroupSnapshot.trim());
+      }
+    });
+    return map;
+  }, [examinations]);
+
+  const groupFilteredDrivers = useMemo(() => {
+    if (!isGroupFilterActive) return drivers;
+    return drivers.filter((drv) =>
+      selectedGroupSet.has((drv.driverGroupId || '').trim().toLowerCase())
+    );
+  }, [drivers, isGroupFilterActive, selectedGroupSet]);
+
+  const groupFilteredExaminations = useMemo(() => {
+    if (!isGroupFilterActive) return examinations;
+    return examinations.filter((exam) => {
+      const code = String(exam.driverId || '').trim().toUpperCase();
+      const masterDrv = driverByIdMap.get(code);
+      const grp = (exam.driverGroupSnapshot || masterDrv?.driverGroupId || '').trim().toLowerCase();
+      return selectedGroupSet.has(grp);
+    });
+  }, [examinations, isGroupFilterActive, selectedGroupSet, driverByIdMap]);
+
+  const groupFilteredAttendanceLogs = useMemo(() => {
+    if (!isGroupFilterActive) return attendanceLogs;
+    return attendanceLogs.filter((log) => {
+      const code = String(log.userCode || '').trim().toUpperCase();
+      const masterDrv = driverByIdMap.get(code);
+      const examGrp = examGroupLookup.get(`${log.logDate}__${code}`);
+      const resolvedGroup = (
+        (log.driverGroup && log.driverGroup.trim()) ||
+        masterDrv?.driverGroupId ||
+        examGrp ||
+        'REGULER'
+      )
+        .trim()
+        .toLowerCase();
+      return selectedGroupSet.has(resolvedGroup);
+    });
+  }, [attendanceLogs, isGroupFilterActive, selectedGroupSet, driverByIdMap, examGroupLookup]);
+
+  // =========================================================================
   // 1. DATA PERHITUNGAN CHART 1: BARCHART RESULT PER BULAN
   // =========================================================================
   const monthlyChartData = useMemo(() => {
@@ -191,7 +334,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des',
     ];
 
-    const examsInYear = examinations.filter((exam) => {
+    const examsInYear = groupFilteredExaminations.filter((exam) => {
       const dateStr = exam.examinationDate || '';
       return dateStr.startsWith(String(selectedYear));
     });
@@ -225,7 +368,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         total: fitCount + fitWithNoteCount + unfitCount,
       };
     });
-  }, [examinations, selectedYear]);
+  }, [groupFilteredExaminations, selectedYear]);
 
   // =========================================================================
   // 2. DATA PERHITUNGAN CHART 2: BARCHART DAILY (ATTENDANCE VS RESULT TENKO)
@@ -251,7 +394,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         month: 'short',
       }).format(d);
 
-      const dayLogs = attendanceLogs.filter(
+      const dayLogs = groupFilteredAttendanceLogs.filter(
         (log) => log.logDate === dateStr && Number(log.fingerFlag) === 1
       );
       const uniqueAttendedDrivers = new Set(
@@ -259,7 +402,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       );
       const attendanceCount = uniqueAttendedDrivers.size;
 
-      const dayExams = examinations.filter((exam) => exam.examinationDate === dateStr);
+      const dayExams = groupFilteredExaminations.filter((exam) => exam.examinationDate === dateStr);
       const uniqueTenkoDrivers = new Set(
         dayExams.map((exam) => String(exam.driverId || '').trim().toUpperCase())
       );
@@ -277,7 +420,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     }
 
     return resultList;
-  }, [attendanceLogs, examinations, dailyRangeOption]);
+  }, [groupFilteredAttendanceLogs, groupFilteredExaminations, dailyRangeOption]);
 
   // =========================================================================
   // 3. DATA PERHITUNGAN TABEL 3: DATABASE RESULT DATA TENKO
@@ -286,7 +429,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     const searchLower = tableResultSearch.trim().toLowerCase();
     const currentMonthPrefix = todayStr.slice(0, 7);
 
-    return examinations.filter((exam) => {
+    return groupFilteredExaminations.filter((exam) => {
       if (tableResultFilterDate === 'TODAY' && exam.examinationDate !== todayStr) {
         return false;
       }
@@ -314,7 +457,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
 
       return true;
     });
-  }, [examinations, tableResultSearch, tableResultFilterRec, tableResultFilterDate, todayStr]);
+  }, [groupFilteredExaminations, tableResultSearch, tableResultFilterRec, tableResultFilterDate, todayStr]);
 
   const paginatedResultTenko = useMemo(() => {
     const startIdx = (tableResultPage - 1) * tableResultPerPage;
@@ -329,8 +472,8 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
   const attendedDriversList = useMemo(() => {
     const targetDate = tableAbsenDate || todayStr;
 
-    // 1. Filter attendance logs for targetDate
-    const dailyLogs = attendanceLogs.filter((log) => log.logDate === targetDate);
+    // 1. Filter attendance logs for targetDate (respecting active group filter)
+    const dailyLogs = groupFilteredAttendanceLogs.filter((log) => log.logDate === targetDate);
 
     // Map to distinct driver by userCode (preferring clock-in log / fingerFlag === 1)
     const driverLogMap = new Map<string, AttendanceLogItem>();
@@ -346,7 +489,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     });
 
     // 2. Filter tenko examinations on targetDate
-    const dailyExams = examinations.filter((exam) => exam.examinationDate === targetDate);
+    const dailyExams = groupFilteredExaminations.filter((exam) => exam.examinationDate === targetDate);
     const examMap = new Map<string, TenkoExamination>();
     dailyExams.forEach((exam) => {
       const code = String(exam.driverId || '').trim().toUpperCase();
@@ -408,7 +551,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     result.sort((a, b) => (b.logTime || '').localeCompare(a.logTime || ''));
 
     return result;
-  }, [attendanceLogs, examinations, drivers, tableAbsenDate, todayStr]);
+  }, [groupFilteredAttendanceLogs, groupFilteredExaminations, drivers, tableAbsenDate, todayStr]);
 
   // Filtered & Paginated Table 4 Data
   const filteredTableAbsen = useMemo(() => {
@@ -447,8 +590,8 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
 
   // Quick stats for top KPI cards
   const statsToday = useMemo(() => {
-    const todayExams = examinations.filter((e) => e.examinationDate === todayStr);
-    const todayLogs = attendanceLogs.filter(
+    const todayExams = groupFilteredExaminations.filter((e) => e.examinationDate === todayStr);
+    const todayLogs = groupFilteredAttendanceLogs.filter(
       (l) => l.logDate === todayStr && Number(l.fingerFlag) === 1
     );
 
@@ -464,13 +607,13 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       totalAttended > 0 ? Math.round((totalTenko / totalAttended) * 100) : 0;
 
     return {
-      totalDrivers: drivers.length,
+      totalDrivers: groupFilteredDrivers.length,
       totalAttended,
       totalTenko,
       totalPendingTenko,
       complianceRate,
     };
-  }, [examinations, attendanceLogs, drivers, todayStr]);
+  }, [groupFilteredExaminations, groupFilteredAttendanceLogs, groupFilteredDrivers, todayStr]);
 
   // Send WhatsApp Reminder
   const handleSendWhatsAppReminder = (phone?: string, name?: string, reason?: string) => {
@@ -487,12 +630,12 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
   };
 
-  // Export Dashboard Data to Excel
+  // Export Dashboard Data to Excel (respects active group filter)
   const handleExportAllToExcel = () => {
     const wb = XLSX.utils.book_new();
 
     // Sheet 1: Hasil Tenko
-    const examsExport = examinations.map((e, idx) => ({
+    const examsExport = groupFilteredExaminations.map((e, idx) => ({
       No: idx + 1,
       'ID TENKO': e.tenkoId,
       Tanggal: e.examinationDate,
@@ -507,7 +650,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
       Suhu: e.temperature ? `${e.temperature} °C` : '-',
       Alkohol: e.alcoholTest || '-',
       'Status Gerbang': e.securityGateStatus || (e.isUsed ? 'PASSED' : 'PENDING'),
-      'Petugas Nakes': e.examinerName,
+      'PIC TENKO': e.examinerName,
     }));
     const ws1 = XLSX.utils.json_to_sheet(examsExport);
     XLSX.utils.book_append_sheet(wb, ws1, 'Hasil_TENKO');
@@ -529,7 +672,12 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
     const ws2 = XLSX.utils.json_to_sheet(absenHariIniExport);
     XLSX.utils.book_append_sheet(wb, ws2, 'Absensi_Hari_Ini');
 
-    XLSX.writeFile(wb, `Laporan_Dashboard_TENKO_${todayStr}.xlsx`);
+    const safeGroupSuffix = isGroupFilterActive
+      ? selectedGroups.length === 1
+        ? `_${selectedGroups[0].replace(/[^a-zA-Z0-9_-]+/g, '_')}`
+        : `_${selectedGroups.length}_Group`
+      : '';
+    XLSX.writeFile(wb, `Laporan_Dashboard_TENKO${safeGroupSuffix}_${todayStr}.xlsx`);
   };
 
   return (
@@ -586,6 +734,181 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
         </div>
       </div>
 
+      {/* ================= GLOBAL MULTI-SELECT GROUP FILTER BAR ================= */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 flex-1">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-700 shrink-0">
+            <Filter className="w-4 h-4 text-blue-600" />
+            <span>Filter Group Dashboard:</span>
+          </div>
+
+          {/* Multi-Select Dropdown */}
+          <div ref={groupDropdownRef} className="relative w-full sm:w-80">
+            <button
+              type="button"
+              id="btn-dashboard-group-filter"
+              onClick={() => setShowGroupDropdown((prev) => !prev)}
+              className={`w-full px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition cursor-pointer ${
+                isGroupFilterActive
+                  ? 'bg-blue-50/70 border-blue-400 text-blue-900'
+                  : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-blue-400'
+              }`}
+            >
+              <span className="truncate text-left">
+                {selectedGroups.length === 0
+                  ? `Semua Group (${availableGroupOptions.length})`
+                  : selectedGroups.length === 1
+                  ? selectedGroups[0]
+                  : `${selectedGroups.length} Group Terpilih`}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {selectedGroups.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white text-[10px] font-extrabold">
+                    {selectedGroups.length}
+                  </span>
+                )}
+                <ChevronDown
+                  className={`w-4 h-4 text-slate-500 transition-transform ${
+                    showGroupDropdown ? 'rotate-180' : ''
+                  }`}
+                />
+              </div>
+            </button>
+
+            {showGroupDropdown && (
+              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-xl z-30 overflow-hidden">
+                {/* Search & Quick Controls */}
+                <div className="p-2.5 bg-slate-50 border-b border-slate-200 space-y-2">
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={groupSearchInput}
+                      onChange={(e) => setGroupSearchInput(e.target.value)}
+                      placeholder="Cari nama group..."
+                      className="w-full pl-8 pr-7 py-1.5 bg-white border border-slate-300 rounded-lg text-xs text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                    />
+                    {groupSearchInput && (
+                      <button
+                        type="button"
+                        onClick={() => setGroupSearchInput('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={handleSelectFilteredGroups}
+                        className="px-2 py-1 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold transition cursor-pointer"
+                      >
+                        Pilih {groupSearchInput ? `Hasil (${filteredGroupOptions.length})` : 'Semua'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleClearGroups}
+                        className="px-2 py-1 rounded-md bg-slate-200/70 hover:bg-slate-200 text-slate-700 font-semibold transition cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowGroupDropdown(false)}
+                      className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-900 text-white font-bold transition cursor-pointer"
+                    >
+                      Selesai
+                    </button>
+                  </div>
+                </div>
+
+                {/* Checkbox List */}
+                <div className="max-h-60 overflow-y-auto divide-y divide-slate-100">
+                  {filteredGroupOptions.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-slate-400">
+                      Group tidak ditemukan
+                    </div>
+                  ) : (
+                    filteredGroupOptions.map((grp) => {
+                      const isChecked = selectedGroupSet.has(grp.trim().toLowerCase());
+                      return (
+                        <button
+                          key={grp}
+                          type="button"
+                          onClick={() => toggleGroupSelection(grp)}
+                          className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between gap-2 text-xs transition cursor-pointer ${
+                            isChecked
+                              ? 'bg-blue-50/80 text-blue-900 font-bold'
+                              : 'hover:bg-slate-50 text-slate-700 font-medium'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span
+                              className={`w-4 h-4 rounded flex items-center justify-center border shrink-0 transition ${
+                                isChecked
+                                  ? 'bg-blue-600 border-blue-600 text-white'
+                                  : 'bg-white border-slate-300'
+                              }`}
+                            >
+                              {isChecked && <Check className="w-3 h-3" />}
+                            </span>
+                            <span className="truncate">{grp}</span>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Active Group Chips */}
+          {isGroupFilterActive && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              {selectedGroups.slice(0, 3).map((grp) => (
+                <span
+                  key={grp}
+                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-blue-50 text-blue-800 border border-blue-200 text-[11px] font-bold"
+                >
+                  <span className="max-w-[140px] truncate">{grp}</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupSelection(grp)}
+                    className="text-blue-500 hover:text-blue-900 cursor-pointer"
+                    aria-label={`Hapus filter ${grp}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              {selectedGroups.length > 3 && (
+                <span className="px-2 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold">
+                  +{selectedGroups.length - 3} lainnya
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleClearGroups}
+                className="text-[11px] font-bold text-rose-600 hover:text-rose-800 px-1.5 py-0.5 cursor-pointer"
+              >
+                Hapus Filter
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="text-[11px] text-slate-500 font-medium shrink-0">
+          {isGroupFilterActive
+            ? `Menampilkan data khusus ${selectedGroups.length} group terpilih`
+            : 'Menampilkan seluruh group armada'}
+        </div>
+      </div>
+
       {/* ================= TOP 5 KPI SUMMARY CARDS ================= */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Total Driver Master */}
@@ -627,7 +950,7 @@ export const ExecutiveDashboardView: React.FC<ExecutiveDashboardViewProps> = ({
           <div className="font-mono font-bold text-2xl text-indigo-700 mt-2">
             {statsToday.totalTenko}
           </div>
-          <span className="text-[11px] text-slate-400 mt-1 block">Diperiksa oleh Nakes</span>
+          <span className="text-[11px] text-slate-400 mt-1 block">Diperiksa oleh PIC TENKO</span>
         </div>
 
         {/* Card 4: Menunggu TENKO Hari Ini */}

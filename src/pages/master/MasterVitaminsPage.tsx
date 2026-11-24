@@ -120,7 +120,7 @@ export const MasterVitaminsPage: React.FC = () => {
             description: formDescription.trim(),
             status: formStatus,
           },
-          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'Nakes' }
+          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'PIC TENKO' }
         );
         showToast('Data vitamin berhasil diperbarui.', 'success');
       } else {
@@ -133,7 +133,7 @@ export const MasterVitaminsPage: React.FC = () => {
             description: formDescription.trim(),
             status: formStatus,
           },
-          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'Nakes' }
+          { userId: currentUser?.userId || 'SYS', fullName: currentUser?.fullName || 'PIC TENKO' }
         );
         showToast('Data vitamin baru berhasil ditambahkan.', 'success');
       }
@@ -153,7 +153,7 @@ export const MasterVitaminsPage: React.FC = () => {
       const docId = itemToDelete.vitaminDocumentId || itemToDelete.vitaminId;
       await deleteVitamin(docId, {
         userId: currentUser?.userId || 'SYS',
-        fullName: currentUser?.fullName || 'Nakes',
+        fullName: currentUser?.fullName || 'PIC TENKO',
       });
       showToast(`Vitamin ${itemToDelete.name} berhasil dihapus.`, 'success');
       setItemToDelete(null);

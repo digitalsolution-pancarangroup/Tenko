@@ -97,7 +97,7 @@ export const QuickAddDriverModal: React.FC<QuickAddDriverModalProps> = ({
         },
         {
           userId: currentUser?.userId || 'SYS',
-          fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+          fullName: currentUser?.fullName || 'PIC TENKO',
         }
       );
 

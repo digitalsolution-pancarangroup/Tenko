@@ -323,7 +323,7 @@ export const PrintableTenkoReport: React.FC<PrintableTenkoReportProps> = ({
             </div>
 
             <div className="text-center sm:text-right">
-              <span className="text-xs font-semibold text-slate-500 uppercase">REKOMENDASI AKHIR NAKES</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase">REKOMENDASI AKHIR PIC TENKO</span>
               <div className="mt-1">
                 <span
                   className={`inline-block px-4 py-1.5 rounded-md font-black text-sm md:text-base border ${
@@ -341,7 +341,7 @@ export const PrintableTenkoReport: React.FC<PrintableTenkoReportProps> = ({
           </div>
 
           <div>
-            <span className="text-xs font-bold text-slate-700 uppercase">Catatan Pemeriksaan / Instruksi Nakes:</span>
+            <span className="text-xs font-bold text-slate-700 uppercase">Catatan Pemeriksaan / Instruksi PIC TENKO:</span>
             <p className="text-xs text-slate-800 mt-1 italic bg-white p-2.5 rounded border border-slate-200 min-h-[42px]">
               {examination.note || '- Tidak ada catatan tambahan -'}
             </p>
@@ -362,9 +362,9 @@ export const PrintableTenkoReport: React.FC<PrintableTenkoReportProps> = ({
           </div>
 
           <div className="text-center">
-            <p className="font-semibold text-slate-600 uppercase">Pemeriksa / Nakes Berwenang</p>
+            <p className="font-semibold text-slate-600 uppercase">Pemeriksa / PIC TENKO Berwenang</p>
             <div className="h-16 flex items-center justify-center text-slate-300 italic">
-              ( Tanda Tangan & Cap Nakes )
+              ( Tanda Tangan &amp; Cap PIC TENKO )
             </div>
             <p className="font-bold text-slate-900 border-t border-slate-400 pt-1 inline-block min-w-[180px]">
               {examination.examinerName || examination.createdBy}

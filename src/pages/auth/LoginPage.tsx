@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
       showToast(
         selectedRole === 'SUPER_ADMIN'
           ? 'Masuk sebagai Super Admin.'
-          : 'Masuk sebagai Nakes (Pemeriksa).',
+          : 'Masuk sebagai PIC TENKO (Pemeriksa).',
         'success'
       );
     } catch (err: any) {
@@ -200,7 +200,7 @@ export const LoginPage: React.FC = () => {
                 <div className="mt-2 flex items-start gap-1.5 p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 text-[11px] text-blue-700 leading-relaxed">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-500" />
                   <span>
-                    <strong>Staf / Nakes Baru:</strong> Jika Anda baru didaftarkan oleh Super Admin, gunakan kata sandi awal: <code className="font-mono bg-blue-100/80 px-1 py-0.5 rounded text-blue-900 font-bold">Pancaran@2026</code>
+                    <strong>Staf / PIC TENKO Baru:</strong> Jika Anda baru didaftarkan oleh Super Admin, gunakan kata sandi awal: <code className="font-mono bg-blue-100/80 px-1 py-0.5 rounded text-blue-900 font-bold">Pancaran@2026</code>
                   </span>
                 </div>
               )}
@@ -222,7 +222,7 @@ export const LoginPage: React.FC = () => {
                     }`}
                   >
                     <Stethoscope className="w-3.5 h-3.5" />
-                    NAKES
+                    PIC TENKO
                   </button>
                   <button
                     type="button"
@@ -272,7 +272,7 @@ export const LoginPage: React.FC = () => {
             >
               {isRegisterMode
                 ? 'Sudah punya akun? Masuk di sini'
-                : 'Belum memiliki akun? Registrasi Nakes di sini'}
+                : 'Belum memiliki akun? Registrasi PIC TENKO di sini'}
             </button>
           </div>
 
@@ -290,7 +290,7 @@ export const LoginPage: React.FC = () => {
                 className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
               >
                 <Stethoscope className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Nakes Pemeriksa</span>
+                <span>PIC TENKO</span>
               </button>
 
               <button

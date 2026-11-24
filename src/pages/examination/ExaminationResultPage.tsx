@@ -178,7 +178,7 @@ export const ExaminationResultPage: React.FC<ExaminationResultPageProps> = ({
             {/* Note section */}
             {examination.note && (
               <div className="p-4 rounded-2xl bg-blue-50/60 border border-blue-200 text-xs">
-                <span className="font-bold text-blue-900 uppercase block mb-1">Catatan Nakes Pemeriksa:</span>
+                <span className="font-bold text-blue-900 uppercase block mb-1">Catatan PIC TENKO:</span>
                 <p className="text-slate-800 italic leading-relaxed">{examination.note}</p>
               </div>
             )}

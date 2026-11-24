@@ -470,7 +470,7 @@ export const SecurityGateVerificationPage: React.FC<SecurityGateVerificationPage
                       : isUnfit
                       ? 'Driver tidak memenuhi syarat kesehatan fisik/mental. Wajib istirahat dan batal jalan.'
                       : isFitWithNote
-                      ? 'Driver diizinkan mengemudi dengan pengawasan catatan medis nakes.'
+                      ? 'Driver diizinkan mengemudi dengan pengawasan catatan PIC TENKO.'
                       : 'Driver dalam kondisi prima dan memenuhi standar keselamatan berkendara.'}
                   </p>
                 </div>
@@ -558,11 +558,11 @@ export const SecurityGateVerificationPage: React.FC<SecurityGateVerificationPage
                 </div>
               </div>
 
-              {/* Nakes Note */}
+              {/* PIC TENKO Note */}
               <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-xs">
                 <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1">
-                  <span>Catatan Nakes Pemeriksa:</span>
-                  <span className="text-amber-400">{matchedExam.examinerName || 'Nakes'} • {matchedExam.examinationDate}</span>
+                  <span>Catatan PIC TENKO:</span>
+                  <span className="text-amber-400">{matchedExam.examinerName || 'PIC TENKO'} • {matchedExam.examinationDate}</span>
                 </div>
                 <p className="text-slate-200 italic">
                   "{matchedExam.note && matchedExam.note !== '-' ? matchedExam.note : 'Kondisi kesehatan stabil dan layak berkendara.'}"

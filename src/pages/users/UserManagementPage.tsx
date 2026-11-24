@@ -283,7 +283,7 @@ export const UserManagementPage: React.FC = () => {
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
             <Stethoscope className="w-3.5 h-3.5 text-blue-600" />
-            <span>Tenaga Kesehatan</span>
+            <span>PIC TENKO</span>
           </span>
         );
       case 'SECURITY':
@@ -355,7 +355,7 @@ export const UserManagementPage: React.FC = () => {
             }`}
           >
             <Stethoscope className="w-3.5 h-3.5" />
-            <span>Tenaga Kesehatan ({stats.nakesCount})</span>
+            <span>PIC TENKO ({stats.nakesCount})</span>
           </button>
           <button
             onClick={() => setRoleFilter('SECURITY')}
@@ -604,7 +604,7 @@ export const UserManagementPage: React.FC = () => {
                     }`}
                   >
                     <Stethoscope className="w-5 h-5 text-blue-600" />
-                    <span className="font-bold text-[11px]">Nakes Medis</span>
+                    <span className="font-bold text-[11px]">PIC TENKO</span>
                   </button>
 
                   <button
@@ -685,7 +685,7 @@ export const UserManagementPage: React.FC = () => {
               {formRole === 'NAKES' && (
                 <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200">
                   <label className="block font-bold text-blue-900 mb-1">
-                    Nomor SIP (Surat Izin Praktik Nakes)
+                    Nomor SIP (Opsional)
                   </label>
                   <input
                     type="text"

@@ -235,7 +235,7 @@ export function calculateAutoTenkoStatus(
   }
   if (input.interview === 'ABNORMAL') {
     isFitWithNote = true;
-    reasons.push('Hasil Wawancara Nakes ABNORMAL');
+    reasons.push('Hasil Wawancara PIC TENKO ABNORMAL');
   }
 
   // Decision formulation

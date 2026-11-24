@@ -57,6 +57,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
 }) => {
   const { currentUser } = useAuth();
   const { showToast } = useToast();
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -397,7 +398,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         return false;
       }
       if (!recommendation) {
-        setStepError('Silakan pilih Rekomendasi Nakes.');
+        setStepError('Silakan pilih Rekomendasi PIC TENKO.');
         return false;
       }
       const isNoteRequired =
@@ -414,11 +415,11 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
           return false;
         }
         if (!newAnalyze.trim()) {
-          setStepError('Analisa nakes wajib diisi untuk keluhan kesehatan driver.');
+          setStepError('Analisa PIC TENKO wajib diisi untuk keluhan kesehatan driver.');
           return false;
         }
         if (!newMeasurement.trim()) {
-          setStepError('Tindakan nakes (Measurement) wajib diisi untuk keluhan kesehatan driver.');
+          setStepError('Tindakan PIC TENKO (Measurement) wajib diisi untuk keluhan kesehatan driver.');
           return false;
         }
       }
@@ -493,7 +494,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
           recommendation: (recommendation as any) || 'FIT TO WORK',
           note: note.trim(),
           examinerUserId: currentUser?.userId || 'SYS_NAKES',
-          examinerName: currentUser?.fullName || 'Ns. Ratna Sari, S.Kep',
+          examinerName: currentUser?.fullName || 'PIC TENKO',
           finishTime: validFinishIso,
           locationId: (() => {
             const matchedLoc = availableLocations.find(
@@ -517,7 +518,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         },
         {
           userId: currentUser?.userId || 'SYS_NAKES',
-          fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+          fullName: currentUser?.fullName || 'PIC TENKO',
         }
       );
 
@@ -532,7 +533,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               created.tenkoId,
               {
                 userId: currentUser?.userId || 'SYS_NAKES',
-                fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+                fullName: currentUser?.fullName || 'PIC TENKO',
               }
             );
           } else {
@@ -544,7 +545,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               },
               {
                 userId: currentUser?.userId || 'SYS_NAKES',
-                fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+                fullName: currentUser?.fullName || 'PIC TENKO',
               }
             );
           }
@@ -577,11 +578,11 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               vitaminDetails: newSelectedVitamins,
               evaluation: '',
               status: 'ACTIVE',
-              examinerName: currentUser?.fullName || 'Nakes Pemeriksa',
+              examinerName: currentUser?.fullName || 'PIC TENKO',
             },
             {
               userId: currentUser?.userId || 'SYS_NAKES',
-              fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+              fullName: currentUser?.fullName || 'PIC TENKO',
             }
           );
         } catch (newHealthErr) {
@@ -600,7 +601,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
             driverName: selectedDriver.fullName,
             currentUser: {
               userId: currentUser?.userId || 'SYS_NAKES',
-              fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+              fullName: currentUser?.fullName || 'PIC TENKO',
             },
           });
         } catch (stockDeductErr) {
@@ -928,7 +929,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                 {/* Follow-up Evaluation Input */}
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Evaluation (Evaluasi Nakes pada TENKO Hari Ini)
+                    Evaluation (Evaluasi PIC TENKO pada TENKO Hari Ini)
                   </label>
                   <textarea
                     rows={2}
@@ -994,15 +995,17 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs font-bold text-slate-400 uppercase tracking-wider">
                 <span>Hasil Pencarian Driver ({filteredDrivers.length})</span>
-                <button
-                  type="button"
-                  id="btn-open-quick-add-exam"
-                  onClick={() => setIsQuickAddOpen(true)}
-                  className="text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 normal-case"
-                >
-                  <UserPlus className="w-3.5 h-3.5" />
-                  + Tambah Driver/Kenek Baru
-                </button>
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    id="btn-open-quick-add-exam"
+                    onClick={() => setIsQuickAddOpen(true)}
+                    className="text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1 normal-case cursor-pointer"
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    + Tambah Driver/Kenek Baru
+                  </button>
+                )}
               </div>
 
               {filteredDrivers.length === 0 ? (
@@ -1010,15 +1013,19 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   <AlertCircle className="w-8 h-8 text-slate-400 mx-auto mb-2" />
                   <p className="text-sm font-bold text-slate-800">Data Driver/Kenek tidak ditemukan.</p>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                    Driver dengan ID atau Nama tersebut belum terdaftar dalam master data. Anda dapat langsung mendaftarkannya sekarang.
+                    {isSuperAdmin
+                      ? 'Driver dengan ID atau Nama tersebut belum terdaftar dalam master data. Anda dapat langsung mendaftarkannya sekarang.'
+                      : 'Driver dengan ID atau Nama tersebut belum terdaftar di Master Driver. Silakan hubungi Super Admin untuk mendaftarkan data driver terlebih dahulu.'}
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setIsQuickAddOpen(true)}
-                    className="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition"
-                  >
-                    + Tambah Driver/Kenek Sekarang
-                  </button>
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickAddOpen(true)}
+                      className="mt-4 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition cursor-pointer"
+                    >
+                      + Tambah Driver/Kenek Sekarang
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-72 overflow-y-auto pr-1">
@@ -1848,7 +1855,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
               {/* Field 29: Recommendation */}
               <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
                 <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
-                  Rekomendasi Nakes <span className="text-rose-500">*</span>
+                  Rekomendasi PIC TENKO <span className="text-rose-500">*</span>
                 </label>
                 <select
                   id="select-recommendation"
@@ -1927,7 +1934,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                       Driver Health: Keluhan Medis & Vitamin
                     </h4>
                     <p className="text-[11px] text-slate-500">
-                      Pencatatan keluhan driver untuk dipantau nakes pada menu Driver Health & TENKO berikutnya
+                      Pencatatan keluhan driver untuk dipantau PIC TENKO pada menu Driver Health &amp; TENKO berikutnya
                     </p>
                   </div>
                 </div>
@@ -1985,7 +1992,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   {/* Analyze (freetext) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Analyze (Analisa Nakes) <span className="text-rose-500">*</span>
+                      Analyze (Analisa PIC TENKO) <span className="text-rose-500">*</span>
                     </label>
                     <textarea
                       id="input-health-analyze"
@@ -2001,7 +2008,7 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
                   {/* Measurement (freetext) */}
                   <div>
                     <label className="block text-xs font-bold text-slate-800 mb-1">
-                      Measurement (Tindakan Medis / Penanganan Nakes) <span className="text-rose-500">*</span>
+                      Measurement (Tindakan / Penanganan PIC TENKO) <span className="text-rose-500">*</span>
                     </label>
                     <textarea
                       id="input-health-measurement"
@@ -2250,14 +2257,16 @@ export const NewExaminationStepper: React.FC<NewExaminationStepperProps> = ({
         </div>
       )}
 
-      {/* Quick Add Driver Modal */}
-      <QuickAddDriverModal
-        isOpen={isQuickAddOpen}
-        onClose={() => setIsQuickAddOpen(false)}
-        onSuccess={handleQuickAddSuccess}
-        initialDriverId={driverSearchQuery.toUpperCase().startsWith('DRV') || driverSearchQuery.toUpperCase().startsWith('KNK') ? driverSearchQuery : ''}
-        initialFullName={!driverSearchQuery.toUpperCase().startsWith('DRV') && !driverSearchQuery.toUpperCase().startsWith('KNK') ? driverSearchQuery : ''}
-      />
+      {/* Quick Add Driver Modal (Super Admin Only) */}
+      {isSuperAdmin && (
+        <QuickAddDriverModal
+          isOpen={isQuickAddOpen}
+          onClose={() => setIsQuickAddOpen(false)}
+          onSuccess={handleQuickAddSuccess}
+          initialDriverId={driverSearchQuery.toUpperCase().startsWith('DRV') || driverSearchQuery.toUpperCase().startsWith('KNK') ? driverSearchQuery : ''}
+          initialFullName={!driverSearchQuery.toUpperCase().startsWith('DRV') && !driverSearchQuery.toUpperCase().startsWith('KNK') ? driverSearchQuery : ''}
+        />
+      )}
     </div>
   );
 };

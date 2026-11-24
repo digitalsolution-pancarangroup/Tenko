@@ -16,7 +16,7 @@ import { logAuditAction } from './auditService';
 import { getDrivers, getDriverByCustomId, updateDriver } from './driverService';
 import { getLocations } from './masterService';
 import { getUsers } from './userService';
-import { generateTenkoExaminationId, generateDriverDocId } from '../utils/idGenerators';
+import { generateTenkoExaminationId } from '../utils/idGenerators';
 import { getOrFetch, invalidateCachePrefix } from '../utils/memoryCache';
 
 const TENKO_CACHE_TTL_MS = 90_000; // 90 seconds
@@ -666,27 +666,15 @@ export async function importTenkoBatch(
 
         const existingDriverInfo = driverMap.get(cleanDriverId);
 
-        const driverName = (row.driverName || existingDriverInfo?.name || `Driver ${cleanDriverId}`).trim();
-        const position = row.position || existingDriverInfo?.pos || (cleanDriverId.startsWith('KNK') ? 'KENEK' : 'DRIVER');
-        const driverGroup = row.driverGroup || existingDriverInfo?.group || 'TETAP';
-
-        // Auto-register driver in map and driver collection if not exists
+        // Reject row if driver is not registered in Master Driver
         if (!existingDriverInfo) {
-          const driverDocId = generateDriverDocId(cleanDriverId);
-          const driverRef = doc(db, 'drivers', driverDocId);
-          batch.set(driverRef, {
-            driverDocumentId: driverDocId,
-            driverId: cleanDriverId,
-            fullName: driverName,
-            driverGroupId: driverGroup,
-            position,
-            status: 'ACTIVE',
-            createdAt: now.toISOString(),
-            createdBy: currentUser.fullName || 'Import TENKO',
-          }, { merge: true });
-          driverMap.set(cleanDriverId, { name: driverName, group: driverGroup, pos: position });
-          result.autoCreatedDriversCount++;
+          result.errors.push(`Baris ${overallIndex} (${cleanDriverId}): Driver belum terdaftar di Master Driver.`);
+          continue;
         }
+
+        const driverName = (row.driverName || existingDriverInfo.name || `Driver ${cleanDriverId}`).trim();
+        const position = row.position || existingDriverInfo.pos || (cleanDriverId.startsWith('KNK') ? 'KENEK' : 'DRIVER');
+        const driverGroup = row.driverGroup || existingDriverInfo.group || 'TETAP';
 
         const sys = Number(row.bloodPressureSystolic) || 120;
         const dia = Number(row.bloodPressureDiastolic) || 80;

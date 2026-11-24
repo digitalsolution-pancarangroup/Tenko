@@ -17,6 +17,7 @@ import { clearAllCaches } from '../utils/memoryCache';
 interface AuthContextType {
   currentUser: User | null;
   firebaseUser: FirebaseUser | null;
+  isSuperAdmin: boolean;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
   loginDemo: (role: UserRole) => Promise<void>;
@@ -88,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const newUser: User = {
                 userId: user.uid,
                 authUid: user.uid,
-                fullName: user.displayName || (role === 'SUPER_ADMIN' ? 'Super Administrator' : 'Nakes Pemeriksa'),
+                fullName: user.displayName || (role === 'SUPER_ADMIN' ? 'Super Administrator' : 'PIC TENKO'),
                 email: user.email || '',
                 role,
                 status: 'ACTIVE',
@@ -263,7 +264,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             activeProfile = {
               userId: cred.user.uid,
               authUid: cred.user.uid,
-              fullName: cred.user.displayName || (isSuperAdminEmail ? 'Super Administrator' : 'Nakes Pemeriksa'),
+              fullName: cred.user.displayName || (isSuperAdminEmail ? 'Super Administrator' : 'PIC TENKO'),
               email: cleanEmail,
               role: isSuperAdminEmail ? 'SUPER_ADMIN' : 'NAKES',
               status: 'ACTIVE',
@@ -409,11 +410,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const isSuperAdmin = currentUser?.role === 'SUPER_ADMIN';
+
   return (
     <AuthContext.Provider
       value={{
         currentUser,
         firebaseUser,
+        isSuperAdmin,
         loading,
         login,
         loginDemo,

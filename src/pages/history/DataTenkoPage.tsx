@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { TenkoExamination, DriverGroup, Nakes, Driver, Location } from '../../types';
+import { TenkoExamination, DriverGroup, User, Driver, Location } from '../../types';
 import { getTenkoExaminations, deleteSelectedTenkoExaminations, resolveExaminationLocationName } from '../../services/tenkoService';
-import { getDriverGroups, getNakesList, getLocations } from '../../services/masterService';
+import { getDriverGroups, getLocations } from '../../services/masterService';
+import { getUsers } from '../../services/userService';
 import { getDrivers } from '../../services/driverService';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
@@ -48,7 +49,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
 }) => {
   const [examinations, setExaminations] = useState<TenkoExamination[]>([]);
   const [driverGroups, setDriverGroups] = useState<DriverGroup[]>([]);
-  const [nakesList, setNakesList] = useState<Nakes[]>([]);
+  const [picTenkoUsers, setPicTenkoUsers] = useState<User[]>([]);
   const [driversList, setDriversList] = useState<Driver[]>([]);
   const [locationsList, setLocationsList] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,17 +127,20 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       setIsRefreshing(true);
     }
     try {
-      const [exams, grps, nakes, drvs, locs] = await Promise.all([
+      const [exams, grps, users, drvs, locs] = await Promise.all([
         getTenkoExaminations(undefined, forceRefresh),
         getDriverGroups(forceRefresh),
-        getNakesList(forceRefresh),
+        getUsers(),
         getDrivers(forceRefresh),
         getLocations(forceRefresh),
       ]);
+      const eligiblePicUsers = users.filter(
+        (u) => (u.role === 'NAKES' || u.role === 'SUPER_ADMIN') && Boolean(u.fullName?.trim())
+      );
       lastSyncAtRef.current = Date.now();
       setExaminations(exams);
       setDriverGroups(grps);
-      setNakesList(nakes);
+      setPicTenkoUsers(eligiblePicUsers);
       setDriversList(drvs);
       setLocationsList(locs);
     } catch (err) {
@@ -185,7 +189,18 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
       const matchGrp = filterGroup === 'ALL' || exam.driverGroupSnapshot === filterGroup;
       const matchRec = filterRecommendation === 'ALL' || exam.recommendation === filterRecommendation;
       const matchSum = filterSummary === 'ALL' || exam.summary === filterSummary;
-      const matchNakes = filterNakes === 'ALL' || exam.examinerName === filterNakes;
+      const selectedPic =
+        filterNakes === 'ALL'
+          ? undefined
+          : picTenkoUsers.find((u) => u.userId === filterNakes || u.fullName === filterNakes);
+      const matchNakes =
+        filterNakes === 'ALL'
+          ? true
+          : selectedPic
+          ? (exam.examinerName || '').trim().toLowerCase() === selectedPic.fullName.trim().toLowerCase() ||
+            (!exam.examinerName?.trim() &&
+              (exam.examinerUserId === selectedPic.userId || exam.examinerUserId === selectedPic.authUid))
+          : (exam.examinerName || '').trim().toLowerCase() === filterNakes.trim().toLowerCase();
       const filterLocNorm = filterLocation.trim().toLowerCase();
       const matchLoc =
         filterLocation === 'ALL' ||
@@ -225,6 +240,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
     filterRecommendation,
     filterSummary,
     filterNakes,
+    picTenkoUsers,
     filterLocation,
     filterSecurityStatus,
   ]);
@@ -770,7 +786,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nakes Pemeriksa</label>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">PIC TENKO</label>
             <select
               value={filterNakes}
               onChange={(e) => {
@@ -779,10 +795,10 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
               }}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white font-medium focus:outline-none"
             >
-              <option value="ALL">Semua Nakes</option>
-              {nakesList.map((n) => (
-                <option key={n.nakesId || n.nakesDocumentId} value={n.fullName}>
-                  {n.fullName}
+              <option value="ALL">Semua PIC TENKO</option>
+              {picTenkoUsers.map((u) => (
+                <option key={u.userId} value={u.userId}>
+                  {u.fullName} ({u.role === 'SUPER_ADMIN' ? 'Super Admin' : 'PIC TENKO'})
                 </option>
               ))}
             </select>
@@ -1121,7 +1137,7 @@ export const DataTenkoPage: React.FC<DataTenkoPageProps> = ({
                   dari database Firestore.
                 </p>
                 <p className="text-[11px] text-amber-700 bg-amber-50 p-2.5 rounded-xl mt-3 border border-amber-200 text-left">
-                  ⚠️ <strong>Catatan:</strong> Data yang dihapus tidak dapat dipulihkan. Data Master Driver, Master Lokasi, dan Master Nakes <strong>tidak akan terhapus</strong>.
+                  ⚠️ <strong>Catatan:</strong> Data yang dihapus tidak dapat dipulihkan. Data Master Driver, Master Lokasi, dan Master PIC TENKO <strong>tidak akan terhapus</strong>.
                 </p>
               </div>
 

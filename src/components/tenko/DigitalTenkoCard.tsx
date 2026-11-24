@@ -65,7 +65,7 @@ export const DigitalTenkoCard: React.FC<DigitalTenkoCardProps> = ({
   // Tenko Message text and styling
   let tenkoMessage = 'Anda sehat, selamat bertugas!';
   if (isFitWithNote) {
-    tenkoMessage = examination.note && examination.note !== '-' ? `Fit Bersyarat: ${examination.note}` : 'Fit dengan Catatan Nakes.';
+    tenkoMessage = examination.note && examination.note !== '-' ? `Fit Bersyarat: ${examination.note}` : 'Fit dengan Catatan PIC TENKO.';
   } else if (isUnfit) {
     tenkoMessage = examination.note && examination.note !== '-' ? `UNFIT: ${examination.note}` : 'Dinyatakan UNFIT - Dilarang Mengemudi!';
   }
@@ -165,7 +165,7 @@ export const DigitalTenkoCard: React.FC<DigitalTenkoCardProps> = ({
             { phoneNumber: phoneToSave },
             {
               userId: currentUser?.userId || 'SYS_NAKES',
-              fullName: currentUser?.fullName || 'Nakes Pemeriksa',
+              fullName: currentUser?.fullName || 'PIC TENKO',
             }
           );
           showToast('Nomor HP berhasil disimpan ke Master Driver.', 'success');

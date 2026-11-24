@@ -342,6 +342,43 @@ export async function deleteAttendanceLogsByDate(
   return docs.length;
 }
 
+/**
+ * Delete selected attendance log documents by their Firestore document IDs
+ */
+export async function deleteSelectedAttendanceLogs(
+  docIds: string[],
+  currentUser?: { userId?: string; email?: string; fullName?: string }
+): Promise<number> {
+  const cleanIds = Array.from(new Set(docIds.map((id) => String(id || '').trim()).filter(Boolean)));
+  if (cleanIds.length === 0) return 0;
+
+  const CHUNK_SIZE = 400;
+  for (let i = 0; i < cleanIds.length; i += CHUNK_SIZE) {
+    const chunk = cleanIds.slice(i, i + CHUNK_SIZE);
+    const batch = writeBatch(db);
+    for (const id of chunk) {
+      batch.delete(doc(db, 'attendanceLogs', id));
+    }
+    await batch.commit();
+  }
+
+  await logAuditAction({
+    action: 'DELETE',
+    entity: 'ATTENDANCE_LOG',
+    entityId: cleanIds.length === 1 ? cleanIds[0] : `BATCH-${cleanIds.length}`,
+    details: {
+      deletedCount: cleanIds.length,
+      sampleIds: cleanIds.slice(0, 10),
+    },
+    userId: currentUser?.userId || currentUser?.email || 'SYSTEM',
+    userName: currentUser?.fullName || currentUser?.email || 'Super Admin',
+  });
+
+  invalidateCachePrefix('attendance:');
+
+  return cleanIds.length;
+}
+
 export interface AttendanceComparisonResult {
   comparisonList: AttendanceComparisonItem[];
   totalLogs: number;
