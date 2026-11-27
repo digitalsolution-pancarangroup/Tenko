@@ -11,7 +11,6 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase
 import { auth, db } from '../firebase';
 import { User, UserRole } from '../types';
 import { seedDatabaseIfEmpty } from '../services/seedData';
-import { logAuditAction } from '../services/auditService';
 import { clearAllCaches } from '../utils/memoryCache';
 
 interface AuthContextType {
@@ -20,8 +19,6 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   loading: boolean;
   login: (email: string, pass: string) => Promise<void>;
-  loginDemo: (role: UserRole) => Promise<void>;
-  register: (email: string, pass: string, fullName: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
 }
@@ -177,7 +174,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (registeredUser) {
           if (registeredUser.status === 'INACTIVE') {
-            throw new Error('Akun Anda dinonaktifkan. Silakan hubungi Super Admin.');
+            throw new Error('Akun Anda dinonaktifkan. Silahkan hubungi admin tenko.');
           }
 
           const targetPassword = (registeredUser.tempPassword || 'Pancaran@2026').trim();
@@ -215,12 +212,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } else {
             throw new Error(
-              `Kata sandi yang Anda masukkan salah. Jika akun Anda baru didaftarkan oleh Super Admin, gunakan password default: ${targetPassword} (perhatikan huruf besar 'P' dan simbol '@').`
+              'Kata sandi yang Anda masukkan salah. Silahkan hubungi admin tenko.'
             );
           }
         } else {
           throw new Error(
-            `Email '${cleanEmail}' belum terdaftar. Pastikan email Anda sudah didaftarkan oleh Super Admin TENKO.`
+            `Email '${cleanEmail}' belum terdaftar. Silahkan hubungi admin tenko.`
           );
         }
       }
@@ -235,7 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (activeProfile.status === 'INACTIVE') {
             await fbSignOut(auth);
             localStorage.removeItem('tenko_auth_user');
-            throw new Error('Akun Anda dinonaktifkan. Silakan hubungi Super Admin.');
+            throw new Error('Akun Anda dinonaktifkan. Silahkan hubungi admin tenko.');
           }
         } else {
           // Check if there is an existing registration by email
@@ -286,103 +283,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         err.code === 'auth/wrong-password' ||
         err.code === 'auth/invalid-credential'
       ) {
-        msg =
-          "Email atau kata sandi tidak valid. Pastikan email terdaftar dan gunakan kata sandi default 'Pancaran@2026' jika baru didaftarkan.";
+        msg = 'Email atau kata sandi tidak valid. Silahkan hubungi admin tenko.';
       } else if (err.code === 'auth/too-many-requests') {
-        msg = 'Terlalu banyak percobaan gagal. Silakan tunggu beberapa saat.';
+        msg = 'Terlalu banyak percobaan gagal. Silakan tunggu beberapa saat atau hubungi admin tenko.';
       } else if (err.message) {
         msg = err.message;
       }
       throw new Error(msg);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loginDemo = async (role: UserRole) => {
-    setLoading(true);
-    try {
-      const demoEmail = role === 'SUPER_ADMIN' ? 'admin@tenko.local' : 'ratna.nakes@pancaran-logistic.id';
-      const demoPass = 'Pancaran@2026';
-      const demoName = role === 'SUPER_ADMIN' ? 'Administrator TENKO' : 'Ns. Ratna Sari, S.Kep';
-
-      try {
-        await signInWithEmailAndPassword(auth, demoEmail, demoPass);
-      } catch (signInErr: any) {
-        // If not exists yet in Auth, create demo user
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, demoEmail, demoPass);
-          const userDocRef = doc(db, 'users', cred.user.uid);
-          const newUser: User = {
-            userId: cred.user.uid,
-            authUid: cred.user.uid,
-            fullName: demoName,
-            email: demoEmail,
-            role,
-            status: 'ACTIVE',
-            createdAt: new Date().toISOString(),
-            createdBy: 'SYSTEM_SEED',
-          };
-          await setDoc(userDocRef, newUser);
-          setCurrentUser(newUser);
-        } catch (createErr) {
-          // If creation fails (e.g. email exists but different pass), simulate in-memory demo user
-          const mockUid = role === 'SUPER_ADMIN' ? 'demo_admin_uid' : 'demo_nakes_uid';
-          const mockUser: User = {
-            userId: mockUid,
-            authUid: mockUid,
-            fullName: demoName,
-            email: demoEmail,
-            role,
-            status: 'ACTIVE',
-            createdAt: new Date().toISOString(),
-            createdBy: 'DEMO',
-          };
-          setCurrentUser(mockUser);
-        }
-      }
-    } catch (err) {
-      console.error('Demo login error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const register = async (email: string, pass: string, fullName: string, role: UserRole) => {
-    setLoading(true);
-    try {
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      const userDocRef = doc(db, 'users', cred.user.uid);
-      const newUser: User = {
-        userId: cred.user.uid,
-        authUid: cred.user.uid,
-        fullName: fullName.trim(),
-        email: email.trim(),
-        role,
-        status: 'ACTIVE',
-        createdAt: new Date().toISOString(),
-        createdBy: 'SELF_REGISTER',
-      };
-      await setDoc(userDocRef, newUser);
-      setCurrentUser(newUser);
-
-      await logAuditAction({
-        module: 'User Management',
-        recordId: cred.user.uid,
-        action: 'USER_REGISTERED',
-        newValue: newUser,
-        userId: cred.user.uid,
-        userName: fullName,
-      });
-    } catch (err: any) {
-      setLoading(false);
-      let msg = 'Gagal mendaftarkan akun.';
-      if (err.code === 'auth/email-already-in-use') {
-        msg = 'Email sudah terdaftar. Silakan gunakan email lain.';
-      } else if (err.code === 'auth/weak-password') {
-        msg = 'Kata sandi terlalu lemah (minimal 6 karakter).';
-      }
-      throw new Error(msg);
     }
   };
 
@@ -404,7 +313,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       let msg = 'Gagal mengirim instruksi reset kata sandi.';
       if (err.code === 'auth/user-not-found') {
-        msg = 'Email tidak ditemukan dalam sistem.';
+        msg = 'Email tidak ditemukan dalam sistem. Silahkan hubungi admin tenko.';
       }
       throw new Error(msg);
     }
@@ -420,8 +329,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSuperAdmin,
         loading,
         login,
-        loginDemo,
-        register,
         logout,
         resetPassword,
       }}

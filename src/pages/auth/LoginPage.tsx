@@ -3,8 +3,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/common/Toast';
 import { TenkoLogo } from '../../components/common/TenkoLogo';
 import {
-  ShieldCheck,
-  Stethoscope,
   Lock,
   Mail,
   ArrowRight,
@@ -12,23 +10,18 @@ import {
   KeyRound,
   CheckCircle2,
   X,
-  Truck,
   Loader2,
   Eye,
   EyeOff,
-  Info,
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
-  const { login, loginDemo, register, resetPassword } = useAuth();
+  const { login, resetPassword } = useAuth();
   const { showToast } = useToast();
 
-  const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'SUPER_ADMIN' | 'NAKES'>('NAKES');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -44,36 +37,10 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      if (isRegisterMode) {
-        if (!fullName.trim()) {
-          throw new Error('Nama Lengkap wajib diisi.');
-        }
-        await register(email, password, fullName, role);
-        showToast('Akun berhasil didaftarkan. Selamat datang di TENKO!', 'success');
-      } else {
-        await login(email, password);
-        showToast('Berhasil masuk ke sistem TENKO.', 'success');
-      }
+      await login(email, password);
+      showToast('Berhasil masuk ke sistem TENKO.', 'success');
     } catch (err: any) {
       setErrorMsg(err.message || 'Terjadi kesalahan saat otentikasi.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDemoLogin = async (selectedRole: 'SUPER_ADMIN' | 'NAKES') => {
-    setErrorMsg('');
-    setLoading(true);
-    try {
-      await loginDemo(selectedRole);
-      showToast(
-        selectedRole === 'SUPER_ADMIN'
-          ? 'Masuk sebagai Super Admin.'
-          : 'Masuk sebagai PIC TENKO (Pemeriksa).',
-        'success'
-      );
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Gagal masuk akun demo.');
     } finally {
       setLoading(false);
     }
@@ -120,25 +87,6 @@ export const LoginPage: React.FC = () => {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isRegisterMode && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Nama Lengkap & Gelar
-                </label>
-                <div className="relative">
-                  <input
-                    id="input-register-name"
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Contoh: Ns. Ratna Sari, S.Kep"
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 text-sm font-medium"
-                    required={isRegisterMode}
-                  />
-                </div>
-              </div>
-            )}
-
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Alamat Email
@@ -162,19 +110,17 @@ export const LoginPage: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
                   Kata Sandi
                 </label>
-                {!isRegisterMode && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowForgotModal(true);
-                      setForgotSuccess(false);
-                      setForgotEmail(email);
-                    }}
-                    className="text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline"
-                  >
-                    Lupa Password?
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotModal(true);
+                    setForgotSuccess(false);
+                    setForgotEmail(email);
+                  }}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-semibold hover:underline cursor-pointer"
+                >
+                  Lupa Password?
+                </button>
               </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
@@ -190,55 +136,13 @@ export const LoginPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 transition"
+                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 transition cursor-pointer"
                   title={showPassword ? 'Sembunyikan Kata Sandi' : 'Lihat Kata Sandi'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-              {!isRegisterMode && (
-                <div className="mt-2 flex items-start gap-1.5 p-2.5 rounded-lg bg-blue-50/70 border border-blue-100 text-[11px] text-blue-700 leading-relaxed">
-                  <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-500" />
-                  <span>
-                    <strong>Staf / PIC TENKO Baru:</strong> Jika Anda baru didaftarkan oleh Super Admin, gunakan kata sandi awal: <code className="font-mono bg-blue-100/80 px-1 py-0.5 rounded text-blue-900 font-bold">Pancaran@2026</code>
-                  </span>
-                </div>
-              )}
             </div>
-
-            {isRegisterMode && (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Peran Akun (Role)
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setRole('NAKES')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition ${
-                      role === 'NAKES'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Stethoscope className="w-3.5 h-3.5" />
-                    PIC TENKO
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('SUPER_ADMIN')}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold border flex items-center justify-center gap-1.5 transition ${
-                      role === 'SUPER_ADMIN'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    SUPER ADMIN
-                  </button>
-                </div>
-              </div>
-            )}
 
             <button
               type="submit"
@@ -253,58 +157,16 @@ export const LoginPage: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <span>{isRegisterMode ? 'Daftar Akun Baru' : 'Masuk ke Sistem'}</span>
+                  <span>Masuk ke Sistem</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
             </button>
           </form>
 
-          {/* Switch Login / Register toggle */}
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setIsRegisterMode(!isRegisterMode);
-                setErrorMsg('');
-              }}
-              className="text-xs text-slate-500 hover:text-slate-800 font-medium"
-            >
-              {isRegisterMode
-                ? 'Sudah punya akun? Masuk di sini'
-                : 'Belum memiliki akun? Registrasi PIC TENKO di sini'}
-            </button>
-          </div>
-
-          {/* Quick Demo Role Switcher for instant testing */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-3">
-              Akses Cepat Pengujian (1-Click Demo)
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                id="btn-demo-nakes"
-                onClick={() => handleDemoLogin('NAKES')}
-                disabled={loading}
-                className="py-2 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-              >
-                <Stethoscope className="w-3.5 h-3.5 text-emerald-600" />
-                <span>PIC TENKO</span>
-              </button>
-
-              <button
-                type="button"
-                id="btn-demo-admin"
-                onClick={() => handleDemoLogin('SUPER_ADMIN')}
-                disabled={loading}
-                className="py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                <span>Super Admin</span>
-              </button>
-            </div>
-          </div>
+          <p className="mt-4 text-center text-xs text-slate-500 font-medium">
+            Jika belum memiliki akun, silahkan hubungi admin TENKO
+          </p>
         </div>
 
         {/* Footer info */}
